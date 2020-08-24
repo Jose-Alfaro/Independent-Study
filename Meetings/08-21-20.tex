@@ -1,0 +1,30 @@
+
+We talked about the potential research projects. They are
+
+1. Predicting Covid 19 statistics with internet data (Twitters, Google trends)
+2. Apply disease mapping ideas to Covid 19 data
+3. END-PANIC data registry project with UT Southwestern
+4. cystic fibrosis data registry
+
+Here are some discussion from previous emails that might be relevant:
+
+5/4:
+Google trend:
+I also find a package that can be useful for extracting Google trends -- gtrendsR.
+At a first glance (visually checking the trends),
+it seems like increasing in google search trend (for keyword "covid") seems to be linked with increasing daily US confirmed case,
+but decreasing in google search trend does not seem to be linked with decreasing US confirmed case.
+When comparing those trends, we are essentially looking at two time-series models.
+What we can try to do here is to build two separate time series models and test for their association.
+If the association is significant, we can do something similar to what you presented on your website, use Google trend data as external data and see how it improve the confirmed case prediction.
+
+
+Disease mapping:
+I think using disease mapping tools like the CARBayes package could be interesting.
+The boundary detected by the package could be used to identify 'hot zones' in the US.
+The CARBayes doesn't have a time-series feature in it, but I think we can explore the covid data with it by specifying the priors based on history.
+See CARBayesvignette.pdf
+
+END-PANIC data:
+See proposal2.pdf
+
