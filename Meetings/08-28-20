@@ -1,0 +1,25 @@
+Today we extended our discussion over COVID related topics such as predicting COVID 19 trends using internet data and disease mapping.
+More specifically, we found that the repository provided by Johns Hopkins University (1) contained both state and county level information on confirmed cases.
+We saw that the dataset provided contained both latitude and longitude columns that would allow us to plot this information on a map of the US potentially 
+through the use of as Shiny application. While searching for this repository, we also found a second dataset provided by the NYTimes (2) that offered both 
+state and county wide confirmed cases in separate files. However, this dataset did not contain any coordinates for the proposed counties.
+
+** Discussion about disease mapping: **
+If we decide to implement disease mapping methodology to the COVID-19 data provided by Johns Hopkins University, we would implement those techniques outlined in
+the CARBayes vignette. It was decided that our response variable in this case would be the number of confirmed cases (counts) with potential covariates such as 
+population in each county or states. The main goal for this upcoming week is to finish reading the CARBayes vignette in order to gain a better understanding of 
+the methodology that is being implemented. 
+We also discussed the possibility of creating an R Shiny application that showcases the "hot spots" in the United States at a county level. As a reference, we will 
+be viewing Paula Moraga's Shiny application (3) and reading over her publication to gain a better understanding of how it works.
+
+** To do list for this week:**
+- Finish reading CARBayes Vignette 
+- Read Paula Moraga's SpatialEpi paper (over the Shiny application)
+- Convert CSV file into a data frame containing longitude, latitude, and counts
+- Look into ggplot's axis break issue. Is this currently doable or do we have to make an extension? Are there any other improvements that can be done? 
+
+** Links: **
+1. Johns Hopkins repository containing county wide confirmed cases: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series
+2. NYTimes Repository containing both state and county wide confirmed cases (missing longitude and latitude coordinates): https://github.com/nytimes/covid-19-data 
+3. Paula Moraga's Shiny Application: https://www.paulamoraga.com/blog/2018/01/04/2018-01-04_spatialepiapp/
+4. SpatialEpi Paper: https://www.sciencedirect.com/science/article/abs/pii/S187758451730062X?via%3Dihub
