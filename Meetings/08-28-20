@@ -23,3 +23,9 @@ be viewing Paula Moraga's Shiny application (3) and reading over her publication
 2. NYTimes Repository containing both state and county wide confirmed cases (missing longitude and latitude coordinates): https://github.com/nytimes/covid-19-data 
 3. Paula Moraga's Shiny Application: https://www.paulamoraga.com/blog/2018/01/04/2018-01-04_spatialepiapp/
 4. SpatialEpi Paper: https://www.sciencedirect.com/science/article/abs/pii/S187758451730062X?via%3Dihub
+
+** Changes:**
+1. Added/moved papers to the .Records/Papers/ folder
+2. There is a newer CARBayes vignette (Version 5.2)
+3. Add a bib file
+4. Re-name the papers based on Google scholar's bib file
