@@ -1,0 +1,17 @@
+** Meeting Discussion: **
+In today's meeting we discussed the CARBayes vignette as well as the SpatialEpi Paper. In this discussion, we pointed out some of the utilities that the application 
+has and noted some improvements that we could implement into our version of it. For instance, we could allow users to specify location on a state level and plot
+a moving visual of the entire United States below the state plot using GGAnimate to save on load time. Additionally, we pointed out some of the flaws that were
+found in the Johns Hopkins dataset. Specifically, its 98 observations with (0, 0) coordinates and its lack of data for Wyoming and Wisconsin. From this, we cross 
+referenced a list of counites in the United States and saw that Wisconsin and Wyoming are composed of 94 counties total. Thus, this raises the question: are the 
+observations with coordinate values (0, 0) suppose to correspond to the missing states? We will do our research to confirm this and find a second dataset for these 
+states to merge with our current dataset to form a complete dataset. Furthermore, we went ahead and cleaned the dataset so that it is composed of only the 50 
+continental states and thus excluding territories and cruise lines from the dataset. From this cleaned dataset, two subsets were created that contained weekly and
+monthly counts (aggregated the data). Lastly, we discussed the possibility of adding a "non-traditional" variable into our model that is composed of sentiment scores 
+based off of Twitter tweets by state.
+
+** To do list for this week:**
+- Upload R script onto github
+- Find missing values for Wyoming and Wisconsin (create a complete dataset)
+- Replicate Examples from the CARBayes vignette using our data
+- Create plots using shape files
