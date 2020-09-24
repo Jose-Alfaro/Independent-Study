@@ -1,0 +1,10 @@
+** Meeting Discussion: **
+- Jose presented his initial approaches to mimic the examples from CARBayes's vignette 
+- Steven went through the code and re-organize the GitHub repository. 
+
+** To do list for this week:**
+- Run Steven's codes and go through the comments on `Disease_Mapping_US_COVID.R`.
+- Things to do listed in the R script: 
+  1. A function to allow user to specify which week or which month or any arbitrary window of date
+  2. HighlightOption: I want to highlight a county when the mouse hovers over it so I used the highlightOptions. But the border stays on even after mouse out. Can you fix it?
+  3. Focus on 48 states?
