@@ -161,8 +161,6 @@ map2 <- leaflet(covid.sp) %>%
   addScaleBar(position = "bottomleft")
 map2
 
-
-
 ## Select by Date
 selectdates <- function(data, start, end){
   tmp1 <- data[, 1:5]
