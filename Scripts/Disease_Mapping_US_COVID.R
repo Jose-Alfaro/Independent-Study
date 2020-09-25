@@ -33,6 +33,7 @@ library(CARBayes)
 library(leaflet)
 library(rgdal)
 library(leaflet)
+library(openair)
 
 ## Load data from Github directly and prepare `tmp`
 dta <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -41,7 +42,7 @@ names(dta) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
                 as.character(as.Date(12:ncol(dta) - 12, origin = "2020/01/22")))
 dta <- subset(dta, !is.na(FIPS))
 dta$FIPS <- sprintf("%05d", dta$FIPS)
-excl <- c("American Samoa","Diamond Princess", "Grand Princess", "Guam", "Northern Mariana Islands", 
+excl <- c("Alaska", "Hawaii", "American Samoa","Diamond Princess", "Grand Princess", "Guam", "Northern Mariana Islands", 
           "Puerto Rico", "Virgin Islands")
 tmp <- subset(dta, !Province_State %in% excl & lat > 0)
 tmp$UID <- tmp$iso2 <- tmp$iso3 <- tmp$code3 <- tmp$Country_Region <- tmp$Combined_key <- NULL
@@ -56,7 +57,7 @@ qplot(long, lat, data = week_count,
       main = "Observations Locations (United States)", xlab = "Longitude", ylab = "Latitude")
 
 ## Creates monthly sum column; the most recent 30 days
-month_count <- subset(tmp, select = c(lat, long))
+month_count <- subset(tmp, select = c(Admin2, lat, long))
 month_count$month_sum <- rowSums(tmp[,tail(1:ncol(tmp), 30)])
 qplot(long, lat, data = month_count, 
       main = "Observations Locations (United States)", xlab = "Longitude", ylab = "Latitude")
@@ -73,8 +74,8 @@ qplot(long, lat, data = tx_weekly,
 ## ###################################################################################
 
 ## Loads SHP and DBF File
-covidshp <- read.shp("../US-Shape/cb_2018_us_county_500k.shp")
-coviddbf <- read.dbf("../US-Shape/cb_2018_us_county_500k.dbf")
+covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
+coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")
 ## coviddbf <- foreign::read.dbf("../US-Shape/US-Census-Shape/cb_2018_us_county_500k.dbf",
 ##                               as.is = TRUE)
 coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
@@ -83,30 +84,107 @@ coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)),
 covid.sp <- combine.data.shapefile(data = week_count, shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+## Format popup data for leaflet map.
+pop_num <- prettyNum(covid.sp$week_sum, big.mark = ',', preserve.width = "none")
+popup_dat <- paste0("<strong>County: </strong>", 
+                    covid.sp$Admin2, 
+                    "<br><strong>Value: </strong>", 
+                    pop_num)
+
 colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$week_sum)
-map1 <- leaflet(data = covid.sp) %>%
-    addTiles() %>%
-    addPolygons(fillColor = ~colours(week_sum), color="", weight=1,
-                fillOpacity = 0.7,
-                highlightOptions =
-                    highlightOptions(color = "black", bringToFront = FALSE, sendToBack = TRUE)) %>%
-    addLegend(pal = colours, values = covid.sp@data$week_sum, opacity = 1, title = "count") %>%
-    addScaleBar(position = "bottomleft")
+map1 <- leaflet(covid.sp) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~ colours(week_sum),
+    weight = 1,
+    opacity = 0.7,
+    color = "white",
+    dashArray = '3',
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE
+    ),
+    popup = popup_dat
+  ) %>%
+  addLegend(
+    pal = colours,
+    values = covid.sp@data$week_sum,
+    opacity = 1,
+    title = "Count"
+  ) %>%
+  addScaleBar(position = "bottomleft")
 map1
 
 ## Confirmed cases in the last 30 days
 covid.sp <- combine.data.shapefile(data = month_count, shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+## Format popup data for leaflet map.
+pop_num <- prettyNum(covid.sp$month_sum, big.mark = ',', preserve.width = "none")
+popup_dat <- paste0("<strong>County: </strong>", 
+                    covid.sp$Admin2, 
+                    "<br><strong>Value: </strong>", 
+                    pop_num)
+
 colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$month_sum)
-map2 <- leaflet(data = covid.sp) %>%
-    addTiles() %>%
-    addPolygons(fillColor = ~colours(month_sum), color="", weight=1,
-                fillOpacity = 0.7,
-                highlightOptions =
-                    highlightOptions(color = "black", bringToFront = FALSE, sendToBack = TRUE)) %>%
-    addLegend(pal = colours, values = covid.sp@data$month_sum, opacity = 1, title = "count") %>%
-    addScaleBar(position = "bottomleft")
+
+map2 <- leaflet(covid.sp) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~ colours(month_sum),
+    weight = 1,
+    opacity = 0.7,
+    color = "white",
+    dashArray = '3',
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE
+    ),
+    popup = popup_dat
+  ) %>%
+  addLegend(
+    pal = colours,
+    values = covid.sp@data$month_sum,
+    opacity = 1,
+    title = "Count"
+  ) %>%
+  addScaleBar(position = "bottomleft")
 map2
 
 
+
+## Select by Date
+selectdates <- function(data, start, end){
+  tmp1 <- data[, 1:5]
+  tmp2 <- data[, grep(start, colnames(data)) : grep(end, colnames(data))]
+  tmp <- cbind(tmp1, tmp2)
+  return(tmp)
+} 
+
+selectdates(data = tmp, start = "2020-09-16", end = "2020-09-22")
+
+# OR
+
+## Select by Date (Second Function)
+selectdates2 <- function(data, start, end){
+  keep <- data[, 1:5]
+  data <- data[, -c(1:5)]
+  tmp1 <- as.Date(names(data))
+  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
+  tmp <- data[, tmp2]
+  tmp$Sum <- rowSums(tmp)
+  tmp <- cbind(keep, tmp)
+  return(tmp)
+}
+
+selectdates2(data = tmp, start = "2020-09-16", end = "2020-09-22")
