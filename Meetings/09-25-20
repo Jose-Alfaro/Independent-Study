@@ -6,5 +6,5 @@ pop-ups. Lastly, I presented my simple rendition of our shiny app.
 ** To do list for this week:**
 1. Add an action button to the shiny app to prevent unnecessary loading times.
 2. Create state vs. county plot.
-3. Adjust by population.
+3. Adjust by population. (LINK: https://www.ers.usda.gov/data-products/county-level-data-sets/download-data/)
 4. Implement CARBayes model from example 3. 
