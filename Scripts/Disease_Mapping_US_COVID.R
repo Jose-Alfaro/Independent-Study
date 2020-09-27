@@ -1,30 +1,3 @@
-#' Suggestions on coding style:
-#' 1. Use ## or #' for comments
-#' 2. Don't use `setwd()` and assume the current working directory is where this script is at
-#' 3. Don't use symbols like "(", ")", "/", "\" in naming files/folders
-#' 4. Specify all packages in the begining
-#' 5. Use ggplot2 family when possible
-#' 6. Don't name files with date; we will use git to track changes.
-#' If you really want to track changes, create a `changeLog` file.
-#'
-#' Comments:
-#' 1. I removed everything that depends on `dplyr` because CARBayes seems to have a function called
-#' `select` and I am not sure if this is causing your codes to fail.
-#' 2. The Fips in week_count is numeric and so is the row.names. I re-defined these.
-#' 3. Your 'data.combined' is already a SpatialPolygonsDataFrame; no need to merge.
-#' Example 2's `GGHB.IG` don't have information in `pricedata` and that's the reason for merge.
-#' 4. CRS is NA because we created the `SpatialPolygonsDataFrame` without definding it, so I
-#' defined it with `proj4string()`, then I project it again with `spTransform()` to something
-#' the leaflet can recognize.
-#' 5. I think leaflet requires "lat" and "long" to specify coordinates (?);
-#' stated on its online document but I am not sure if this is true. I changed the names anyways.
-#'
-#' To-do
-#' 1. A function to allow user to specify which week or which month or any arbitrary window of date
-#' 2. HighlightOption: I want to highlight a county when the mouse hovers over it so I used the
-#' highlightOptions. But the border stays on even after mouse out. Can you fix it?
-#' 3. Focus on 48 states?
-
 ## Required packages
 library(ggplot2)
 library(shapefiles)
@@ -46,8 +19,32 @@ excl <- c("Alaska", "Hawaii", "American Samoa","Diamond Princess", "Grand Prince
           "Puerto Rico", "Virgin Islands")
 tmp <- subset(dta, !Province_State %in% excl & lat > 0)
 tmp$UID <- tmp$iso2 <- tmp$iso3 <- tmp$code3 <- tmp$Country_Region <- tmp$Combined_key <- NULL
-row.names(tmp) <- tmp$FIPS
+row.names(tmp) <- tmp$FIPS ## dim(tmp) 3108 254
 
+## Data set up for county population
+county <- read.csv("../Data/PopulationEstimates.csv")
+county <- subset(county, select = c(1, 20))
+colnames(county) <- c("FIPS", "Pop_Estimate_2019") 
+county$FIPS <- sprintf("%05d", county$FIPS)
+county$Pop_Estimate_2019 <- as.numeric(gsub(",", "", county$Pop_Estimate_2019))
+county <- merge(county, tmp, by = "FIPS") ## dim 3108 255
+county[, 7:ncol(county)] <- county[, 7:ncol(county)]/county[, 2] * 100
+county$Pop_Estimate_2019 <- NULL
+row.names(county) <- county$FIPS 
+
+## Date Specification Function
+selectdates <- function(data, start, end){
+  keep <- data[, 1:5]
+  data <- data[, -c(1:5)]
+  tmp1 <- as.Date(names(data))
+  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
+  tmp <- data[, tmp2]
+  Sum <- rowSums(tmp)
+  tmp <- cbind(keep, Sum)
+  return(tmp)
+}
+
+county <- selectdates(data = county, start = "2020-09-20", end = "2020-09-26")
 
 ## Creates weekly sum column; the most recent 7 days
 week_count <- subset(tmp, select = c(FIPS, Admin2, Province_State, lat, long))
@@ -62,22 +59,10 @@ month_count$month_sum <- rowSums(tmp[,tail(1:ncol(tmp), 30)])
 qplot(long, lat, data = month_count, 
       main = "Observations Locations (United States)", xlab = "Longitude", ylab = "Latitude")
 
-## Weekly Sum in Texas
-tx_weekly <- subset(week_count, Province_State == "Texas")
-qplot(long, lat, data = tx_weekly,
-      main = "Observations Locations (Texas)", xlab = "Longitude", ylab = "Latitude")
-
-
-## ###################################################################################
-## Combining data frame and shapefile to form SpatialPolygonsDataFrame
-## This is to mimic example 2 (Section 5.1) in CARBayes vignette
-## ###################################################################################
-
 ## Loads SHP and DBF File
 covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
 coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")
-## coviddbf <- foreign::read.dbf("../US-Shape/US-Census-Shape/cb_2018_us_county_500k.dbf",
-##                               as.is = TRUE)
+
 coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
 
 ## Confirmed cases in the last 7 days
@@ -161,28 +146,62 @@ map2 <- leaflet(covid.sp) %>%
   addScaleBar(position = "bottomleft")
 map2
 
-## Select by Date
-selectdates <- function(data, start, end){
-  tmp1 <- data[, 1:5]
-  tmp2 <- data[, grep(start, colnames(data)) : grep(end, colnames(data))]
-  tmp <- cbind(tmp1, tmp2)
-  return(tmp)
-} 
 
-selectdates(data = tmp, start = "2020-09-16", end = "2020-09-22")
+## Confirmed cases in the last 7 days (Adjusted by County)
+covid.sp <- combine.data.shapefile(data = county, shp = covidshp, dbf = coviddbf)
+proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
-# OR
+## Format popup data for leaflet map.
+pop_num <- prettyNum(covid.sp$Sum, big.mark = ',', preserve.width = "none")
+popup_dat <- paste0("<strong>County: </strong>", 
+                    covid.sp$Admin2, 
+                    "<br><strong>Value: </strong>", 
+                    pop_num)
 
-## Select by Date (Second Function)
-selectdates2 <- function(data, start, end){
-  keep <- data[, 1:5]
-  data <- data[, -c(1:5)]
-  tmp1 <- as.Date(names(data))
-  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
-  tmp <- data[, tmp2]
-  tmp$Sum <- rowSums(tmp)
-  tmp <- cbind(keep, tmp)
-  return(tmp)
-}
+colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$Sum)
+map1 <- leaflet(covid.sp) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~ colours(Sum),
+    weight = 1,
+    opacity = 0.7,
+    color = "white",
+    dashArray = '3',
+    fillOpacity = 0.7,
+    highlight = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE
+    ),
+    popup = popup_dat
+  ) %>%
+  addLegend(
+    pal = colours,
+    values = covid.sp@data$Sum,
+    opacity = 1,
+    title = "Count"
+  ) %>%
+  addScaleBar(position = "bottomleft")
+map1
 
-selectdates2(data = tmp, start = "2020-09-16", end = "2020-09-22")
+
+
+## Aggregate By State
+state_count <- selectdates(data = tmp, start = "2020-09-16", end = "2020-09-22")
+state_count <- data.frame(STATEFP = substr(state_count$FIPS, 0, 2), state_count[,c(3,6)])
+state_count <- aggregate(state_count$Sum, by = list(state_count$STATEFP), FUN = sum)
+colnames(state_count) <- c("STATEFP", "Count")
+row.names(state_count) <- state_count$STATEFP
+
+
+
+## State-Wide Confirmed Cases 
+coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")
+coviddbf$dbf$STATEFP <- as.character(coviddbf$dbf$STATEFP)
+covid.sp <- combine.data.shapefile(data = state_count, shp = covidshp, dbf = coviddbf)
+## WARNINGS happen here
+proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
