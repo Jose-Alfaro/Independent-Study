@@ -1,0 +1,10 @@
+** Meeting Discussion: **
+- I presented my progress so far which included: the date specification function that allows users to specify a time period to view the data, an update
+to the dataset (removed Alaska and Hawaii), and some updates to the leaflet plot such as the addition of the county hightlight and the descriptive data 
+pop-ups. Lastly, I presented my simple rendition of our shiny app.
+
+** To do list for this week:**
+1. Add an action button to the shiny app to prevent unnecessary loading times.
+2. Create state vs. county plot.
+3. Adjust by population.
+4. Implement CARBayes model from example 3. 
