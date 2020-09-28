@@ -146,7 +146,7 @@ map2 <- leaflet(covid.sp) %>%
   addScaleBar(position = "bottomleft")
 map2
 
-
+## CHECK THIS PLOT OUT! WOW, what a difference adjusting for population does for the plot.
 ## Confirmed cases in the last 7 days (Adjusted by County)
 covid.sp <- combine.data.shapefile(data = county, shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
