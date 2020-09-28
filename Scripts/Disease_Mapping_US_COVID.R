@@ -205,3 +205,4 @@ covid.sp <- combine.data.shapefile(data = state_count, shp = covidshp, dbf = cov
 ## WARNINGS happen here
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+

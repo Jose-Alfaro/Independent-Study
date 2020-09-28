@@ -97,6 +97,7 @@ server <- function(input, output) {
         row.names(df) <- df$FIPS
         df
     })
+    
     observeEvent(input$submitButton, {
         output$statePlot <- renderLeaflet({
             ## Instead of FIPS, this shape file uses STATEFP?            
@@ -141,7 +142,6 @@ server <- function(input, output) {
         })
     })
 }
-
 
 ## Run the application 
 shinyApp(ui = ui, server = server)
