@@ -31,6 +31,13 @@ perc[, 7:ncol(perc)] <- perc[, 7:ncol(perc)]/perc[, 2] * 100
 perc$Pop_Estimate_2019 <- NULL
 row.names(perc) <- perc$FIPS 
 
+## Loads SHP and DBF File
+covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
+coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")            
+coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
+covidshpstate <- read.shp("../Shape_Files/cb_2018_us_state_500k.shp")
+coviddbfstate <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")            
+
 ## Date Specification Function
 selectdates <- function(data, start, end){
     keep <- data[, 1:5]
@@ -44,15 +51,13 @@ selectdates <- function(data, start, end){
 }
 
 
-# Define UI for application that draws a histogram
-ui <- fluidPage(
-    
-    # Application title
+## Define UI for application that draws a histogram
+ui <- fluidPage(    
+    ## Application title
     titlePanel("United States COVID-19 Mapping"),
     tags$em("By: Jose Alfaro"),
     tags$hr(),
-    
-    # Sidebar with a slider input for number of bins 
+    ## Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
             dateRangeInput("daterange", "Date Range:",
@@ -62,8 +67,7 @@ ui <- fluidPage(
             selectInput("typeChoice", "Data Type:", choices = c("", "Raw", "Percentage")),
             actionButton("submitButton", "Submit", class = "btn btn-primary")
         ),
-        
-        # Display leaflet plot of cases
+        ## Display leaflet plot of cases
         mainPanel(
             leafletOutput("countyPlot"),
             leafletOutput("statePlot")
@@ -71,7 +75,7 @@ ui <- fluidPage(
     )
 )
 
-# Define server logic required to draw a histogram
+## Define server logic required to draw a histogram
 server <- function(input, output) {
     observeEvent(input$ptChoice, {
         req(input$ptchoice)
@@ -84,43 +88,31 @@ server <- function(input, output) {
             show("statePlot")
         }
     })
-    
     fdta <- eventReactive(input$typeChoice, {
         if (input$typeChoice == "Raw"){
             df <- selectdates(data = tmp, start = input$daterange[1], end = input$daterange[2])
-            row.names(df) <- df$FIPS
-        }else if (input$typeChoice == "Percentage"){
+        } else if (input$typeChoice == "Percentage"){
             df <- selectdates(data = perc, start = input$daterange[1], end = input$daterange[2])
-        }else {return(NULL)}
+        } else {return(NULL)}
+        row.names(df) <- df$FIPS
         df
     })
-    
     observeEvent(input$submitButton, {
         output$statePlot <- renderLeaflet({
-            
+            ## Instead of FIPS, this shape file uses STATEFP?            
         })
         output$countyPlot <- renderLeaflet({
-
-            ## Loads SHP and DBF File
-            covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
-            coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")
-            
-            coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
-            
-            ## Confirmed cases in the last 7 days
+            ## Confirmed cases given dates
             covid.sp <- combine.data.shapefile(data = fdta(), shp = covidshp, dbf = coviddbf)
             proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
-            covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
-            
+            covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))            
             ## Format popup data for leaflet map.
             pop_num <- prettyNum(covid.sp$Sum, big.mark = ',', preserve.width = "none")
             popup_dat <- paste0("<strong>County: </strong>", 
                                 covid.sp$Admin2, 
                                 "<br><strong>Value: </strong>", 
                                 pop_num)
-            
             colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$Sum)
-            
             leaflet(covid.sp) %>%
                 addTiles() %>%
                 addPolygons(
@@ -148,8 +140,11 @@ server <- function(input, output) {
                 addScaleBar(position = "bottomleft")
         })
     })
-
 }
 
-# Run the application 
+
+## Run the application 
 shinyApp(ui = ui, server = server)
+
+
+
