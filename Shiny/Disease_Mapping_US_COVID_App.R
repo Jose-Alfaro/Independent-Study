@@ -21,26 +21,26 @@ tmp$UID <- tmp$iso2 <- tmp$iso3 <- tmp$code3 <- tmp$Country_Region <- tmp$Combin
 row.names(tmp) <- tmp$FIPS
 
 ## Data set up for county population
-county <- read.csv("../Data/PopulationEstimates.csv")
-county <- subset(county, select = c(1, 20))
-colnames(county) <- c("FIPS", "Pop_Estimate_2019") 
-county$FIPS <- sprintf("%05d", county$FIPS)
-county$Pop_Estimate_2019 <- as.numeric(gsub(",", "", county$Pop_Estimate_2019))
-county <- merge(county, tmp, by = "FIPS") ## dim 3108 255
-county[, 7:ncol(county)] <- county[, 7:ncol(county)]/county[, 2] * 100
-county$Pop_Estimate_2019 <- NULL
-row.names(county) <- county$FIPS 
+perc <- read.csv("../Data/PopulationEstimates.csv")
+perc <- subset(perc, select = c(1, 20))
+colnames(perc) <- c("FIPS", "Pop_Estimate_2019") 
+perc$FIPS <- sprintf("%05d", perc$FIPS)
+perc$Pop_Estimate_2019 <- as.numeric(gsub(",", "", perc$Pop_Estimate_2019))
+perc <- merge(perc, tmp, by = "FIPS") ## dim 3108 255
+perc[, 7:ncol(perc)] <- perc[, 7:ncol(perc)]/perc[, 2] * 100
+perc$Pop_Estimate_2019 <- NULL
+row.names(perc) <- perc$FIPS 
 
-## User Date Specification 
-selectdates2 <- function(data, start, end){
+## Date Specification Function
+selectdates <- function(data, start, end){
     keep <- data[, 1:5]
     data <- data[, -c(1:5)]
-    v1 <- as.Date(names(data))
-    v2 <- which(v1 >= as.Date(start) & v1 <= as.Date(end))
-    tdta <- data[, v2]
-    tdta$Sum <- rowSums(tdta)
-    dta2 <- cbind(keep, tdta)
-    return(dta2)
+    tmp1 <- as.Date(names(data))
+    tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
+    tmp <- data[, tmp2]
+    Sum <- rowSums(tmp)
+    tmp <- cbind(keep, Sum)
+    return(tmp)
 }
 
 
@@ -76,9 +76,23 @@ server <- function(input, output) {
     observeEvent(input$ptChoice, {
         req(input$ptchoice)
         if(input$ptChoice == "County-Wide"){
+            hide("statePlot")
+            show("countyPlot")
+        }
+        else{
             hide("countyPlot")
             show("statePlot")
         }
+    })
+    
+    fdta <- eventReactive(input$typeChoice, {
+        if (input$typeChoice == "Raw"){
+            df <- selectdates(data = tmp, start = input$daterange[1], end = input$daterange[2])
+            row.names(df) <- df$FIPS
+        }else if (input$typeChoice == "Percentage"){
+            df <- selectdates(data = perc, start = input$daterange[1], end = input$daterange[2])
+        }else {return(NULL)}
+        df
     })
     
     observeEvent(input$submitButton, {
@@ -86,9 +100,7 @@ server <- function(input, output) {
             
         })
         output$countyPlot <- renderLeaflet({
-            dta2 <- selectdates2(data = tmp, start = input$daterange[1], end = input$daterange[2])
-            row.names(dta2) <- dta2$FIPS
-            
+
             ## Loads SHP and DBF File
             covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
             coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")
@@ -96,7 +108,7 @@ server <- function(input, output) {
             coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
             
             ## Confirmed cases in the last 7 days
-            covid.sp <- combine.data.shapefile(data = dta2, shp = covidshp, dbf = coviddbf)
+            covid.sp <- combine.data.shapefile(data = fdta(), shp = covidshp, dbf = coviddbf)
             proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
             covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
             
