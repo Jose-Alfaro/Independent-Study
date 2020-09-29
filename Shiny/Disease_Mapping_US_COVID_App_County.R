@@ -96,7 +96,7 @@ map0 <-  leaflet(data = covid.sp) %>%
 
 ui <- fluidPage(    
     ## Application title
-    titlePanel("United States COVID-19 Mapping"),
+    titlePanel("United States COVID-19 Mapping - County level"),
     tags$em("By: Jose Alfaro"),
     tags$hr(),
     ## Sidebar with a slider input for number of bins 

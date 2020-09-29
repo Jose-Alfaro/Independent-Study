@@ -8,3 +8,38 @@ pop-ups. Lastly, I presented my simple rendition of our shiny app.
 2. Create state vs. county plot.
 3. Adjust by population. (LINK: https://www.ers.usda.gov/data-products/county-level-data-sets/download-data/)
 4. Implement CARBayes model from example 3. 
+
+
+** Follow-up comments from Steven **
+I made many changes to the Shiny app R script to improve the loading times.
+Normally, I would directly edit the R scripts and use git-diff to track the difference,
+but I decided to save my edits in a new file (Disease_Mapping_US_COVID_App_County.R)
+so we can compare the two Shiny apps parallely. 
+
+
+A general approach to speed up the computing time is to avoid doing reducent tasks.
+We only need to load the shapefile once and modify its content based on the inputs for our application.
+While moving items outside of the `serve()` function, I realized the long load time at each action is
+caused by adding a large size of polygons, e.g., the `addPolygens()` in `observeEvent()`.
+This is why I created a `map0` (a default map) outside of the `ui()` and `serve()`,
+and use it as the base. The `map0` only needs to be loaded once initially.
+I then use `leafletProxy()` to modify `map0`.
+The current version of the `leaflet` package (2.0.3) does not have a `set` to modify the shape style (see ?setView),
+and this is why I came across this forum: https://github.com/rstudio/leaflet/issues/496.
+A user, `edwindj`, outlined a `setShapeStyle()` function for manipulating the shape style and this is what I end up using.
+To use his version, you have to re-install leaflet from his github repository, e.g., with devtools::install_github("edwindj/leaflet").
+Please try to understand my codes. Here are things that we need to add to the Shiny app:
+
+1. I temporarily removed the state level map, but we will add it back. The error that you described is likely due to ID mismatch; the state-level shapefile doesn't use FIPS for id.
+2. Add a loading message in the begining when the server is loading `map0`. After that, everything is very fast and we probably don't need a loading message.
+3. Installing leaflet from edwindj's repository downgrades my leaflet package to version 2.0.2. Can you see if there is any ways to use `setShapeStyle()` under the latest version of `leaflet`?
+4. The `setShapeStyle()` works great, but does not update the pop-up box. Can you think about how to extend the `setShapeStyle()` function to make it work with `popup`?
+5. Instead of having two dataset (tmp and perc), why not just have one unified data.frame with both sum and percentage?  This would condense the code a bit. Also, please rename the `tmp` data.frame.
+I think it's okay to name an object `tmp` in function, but it is not very informative to use it to name a data.frame.
+6. I realized the counts in the original csv file are cumulative counts and that's why I calculated the difference after subset.
+7. Now that the map renders pretty fast, we start to think about animation.
+8. Please add some checks for the dates, e.g., start date <= end date, the start date and the end date should be between the dates data is available. Please also add a shortcut to select all available dates.
+9. We can also look at other transformations. For example, log(1 + count), death by counts.
+
+Items 3 and 4 will make you become more familar with structure of R packages and I encourage you to start to think about how to approach these.
+Other items are pretty easy for you, I think.
