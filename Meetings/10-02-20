@@ -1,8 +1,24 @@
-**Questions:**
+** Questions: **
 1. What is the plan for the state plots? Will we load a second 'map0' leaflet outside of the server function?
 2. In terms of animation, are we expecting to create an application similar to the on you discussed in the email(1)? Or are we still trying to replicate SpatialEpiApp? 
 3. How are we formatting other data, such as deaths, into the compiled dataset since they all share the same column name? 
 4. Alternative to setShapeStyle() could be to have a "hover" option to display stats rather than clicking. (use label option instead of popup)
 
-**Links:**
+** Meeting Discussion: **
+In today's meeting, I presented my updates to the shiny application. These updates included creating a check box to allow users to select all dates in the dataset, creating 
+"catch cases" for scenarios where users specify an incorrect date range, creating a loading screen for the leaflet plot, merging the "dta" and "perc" datasets to create one final
+dataset called "pop", and formatting the death dataset. We also discussed some drawbacks of the application such as an issue with the check box that allows users to change the date
+range even after selecting 'all data' and the inability for the popup messages to update on the leaflet plot. Lastly, we discussed the future format of the shiny application and 
+are thinking of merging the two concepts between SpatialEpiApp and the shiny application in the link below.
+
+** To do list for this week: **
+- Find a way to allow 'setShapeStyle()' to work with the current version of leaflet.
+- Fix the bug with the checkbox.
+- Allow statistics to be shown over the counties with the cursor.
+- Darken county/state lines.
+- Fix 'sum' column issue when calling 'selectdate()' function by adding a new column to df to avoid confusion.
+- Merge death data set within 'selectdate()' function to form one final dataset.
+- Create a model following example #3 in the vignette. 
+
+** Links: **
 1. https://vac-lshtm.shinyapps.io/ncov_tracker/?_ga=2.229978399.2096899023.1601575071-311322994.1589862584
