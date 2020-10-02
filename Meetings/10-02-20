@@ -1,0 +1,8 @@
+**Questions:**
+1. What is the plan for the state plots? Will we load a second 'map0' leaflet outside of the server function?
+2. In terms of animation, are we expecting to create an application similar to the on you discussed in the email(1)? Or are we still trying to replicate SpatialEpiApp? 
+3. How are we formatting other data, such as deaths, into the compiled dataset since they all share the same column name? 
+4. Alternative to setShapeStyle() could be to have a "hover" option to display stats rather than clicking. (use label option instead of popup)
+
+**Links:**
+1. https://vac-lshtm.shinyapps.io/ncov_tracker/?_ga=2.229978399.2096899023.1601575071-311322994.1589862584
