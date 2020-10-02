@@ -119,7 +119,9 @@ ui <- fluidPage(
     sidebarPanel(
       dateRangeInput("daterange", "Date Range:",
                      start = as.character(Sys.Date() - 6),
-                     end = as.character(Sys.Date())),
+                     end = as.character(Sys.Date()),
+                     min = "2020-01-22",
+                     max = Sys.Date()),
       checkboxInput("checkBox", "Select all dates", FALSE),
       textOutput("dateCheck"),
       selectInput("typeChoice", "Data Type:", choices = c("Raw", "Percentage")),
@@ -132,14 +134,23 @@ ui <- fluidPage(
   )
 )
 
-server <- function(input, output) {
+server <- function(input, output, session) {
+  
+  observe({
+    if (input$checkBox == TRUE){
+      updateDateRangeInput(session,
+                           "daterange",
+                           "Date Range:",
+                           start = "2020-01-22",
+                           end = Sys.Date(),
+                           min = "2020-01-22",
+                           max = Sys.Date())
+    }
+  })
   
   output$dateCheck <- renderText({
     validate(
       need(input$daterange[2] > input$daterange[1], "WARNING: End date is earlier than start date.")
-    )
-    validate(
-      need(input$daterange[1] > as.Date("2020-01-21"), "WARNING: Start date is earlier than available data.")
     )
     validate(
       need(input$daterange[2] < as.character(Sys.Date() + 1), "WARNING: End date is later than available data.")
