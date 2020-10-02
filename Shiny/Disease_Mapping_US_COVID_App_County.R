@@ -1,5 +1,5 @@
-#devtools::install_github("rstudio/leaflet")
-#devtools::install_github("edwindj/leaflet")
+## devtools::install_github("rstudio/leaflet")
+## devtools::install_github("edwindj/leaflet")
 ## https://github.com/rstudio/leaflet/issues/496
 
 library(ggplot2)
@@ -12,7 +12,7 @@ library(leaflet)
 library(shiny)
 library(shinycssloaders)
 
-## Load data from Github directly and prepare `tmp`
+## Loads count data from Github directly and prepare `dta`
 dta <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
 names(dta) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
                 "Province_State", "Country_Region", "lat", "long", "Combined_key",
@@ -26,16 +26,25 @@ dta$UID <- dta$iso2 <- dta$iso3 <- dta$code3 <- dta$Country_Region <- dta$Combin
 dta[,-(1:5)] <- t(apply(dta[,-(1:5)], 1, function(x) pmax(0, diff(c(0, x)))))
 row.names(dta) <- dta$FIPS
 
+## Loads deaths data from Github directly
+death <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv"))
+names(death) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
+                "Province_State", "Country_Region", "lat", "long", "Combined_key",
+                as.character(as.Date(12:ncol(death) - 12, origin = "2020/01/22")))
+death <- subset(death, !is.na(FIPS))
+death$FIPS <- sprintf("%05d", death$FIPS)
+death <- subset(death, !Province_State %in% excl & lat > 0)
+death$UID <- death$iso2 <- death$iso3 <- death$code3 <- death$Country_Region <- death$Combined_key <- NULL
+death[,-(1:5)] <- t(apply(death[,-(1:5)], 1, function(x) pmax(0, diff(c(0, x)))))
+row.names(death) <- death$FIPS
+
 ## Data set up for county population
-perc <- read.csv("../Data/PopulationEstimates.csv")
-perc <- subset(perc, select = c(1, 20))
-colnames(perc) <- c("FIPS", "Pop_Estimate_2019") 
-perc$FIPS <- sprintf("%05d", perc$FIPS)
-perc$Pop_Estimate_2019 <- as.numeric(gsub(",", "", perc$Pop_Estimate_2019))
-perc <- merge(perc, dta, by = "FIPS") ## dim 3108 255
-perc[, 7:ncol(perc)] <- perc[, 7:ncol(perc)]/perc[, 2] * 100
-perc$Pop_Estimate_2019 <- NULL
-row.names(perc) <- perc$FIPS 
+pop <- read.csv("../Data/PopulationEstimates.csv")
+pop <- subset(pop, select = c(1, 20))
+colnames(pop) <- c("FIPS", "Pop_Estimate_2019") 
+pop$FIPS <- sprintf("%05d", pop$FIPS)
+pop$Pop_Estimate_2019 <- as.numeric(gsub(",", "", pop$Pop_Estimate_2019))
+pop <- merge(pop, dta, by = "FIPS") 
 
 ## Loads SHP and DBF File
 covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
@@ -46,23 +55,27 @@ coviddbfstate <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")
 
 ## Date Specification Function
 selectdates <- function(data, start, end){
-  keep <- data[, 1:5]
-  data <- data[, -c(1:5)]
+  keep <- data[, 1:6]
+  data <- data[, -c(1:6)]
   tmp1 <- as.Date(names(data))
   tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
   tmp <- data[, tmp2]
   Sum <- rowSums(tmp)
-  tmp <- cbind(keep, Sum)
+  Perc_Sum <- rowSums(tmp[, 1:ncol(tmp)]/keep[, 2] * 100)
+  tmp <- cbind(keep, Sum, Perc_Sum)
+  tmp$Pop_Estimate_2019 <- NULL
+  row.names(tmp) <- tmp$FIPS
   return(tmp)
 }
 
 ## Default shape file
 ## Confirmed cases given dates
 covid.sp <- combine.data.shapefile(
-  data = selectdates(data = dta, start = Sys.Date() - 6, end = Sys.Date()),
+  data = selectdates(data = pop, start = Sys.Date() - 6, end = Sys.Date()),
   shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
 ## Format popup data for leaflet map.
 pop_num <- prettyNum(covid.sp$Sum, big.mark = ',', preserve.width = "none")
 popup_dat <- paste0("<strong>County: </strong>", 
@@ -108,7 +121,7 @@ ui <- fluidPage(
       }
     "))
   ),
-
+  
   
   ## Application title
   titlePanel("United States COVID-19 Mapping - County level"),
@@ -160,9 +173,12 @@ server <- function(input, output, session) {
   output$casemap <- renderLeaflet(map0)    
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
-      df <- selectdates(data = dta, start = input$daterange[1], end = input$daterange[2])
+      df <- selectdates(data = pop, start = input$daterange[1], end = input$daterange[2])
+      df$Perc_Sum <- NULL
     } else if (input$typeChoice == "Percentage"){
-      df <- selectdates(data = perc, start = input$daterange[1], end = input$daterange[2])
+      df <- selectdates(data = pop, start = input$daterange[1], end = input$daterange[2])
+      df$Sum <- NULL
+      colnames(df)[6] <- "Sum"
     } else {return(NULL)}
     row.names(df) <- df$FIPS
     new.covid.sp <- covid.sp
