@@ -10,79 +10,81 @@ library(leaflet)
 library(rgdal)
 library(leaflet)
 library(shiny)
-library(shinycssloaders)
 
-## Loads count data from Github directly and prepare `dta`
-dta <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
-names(dta) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
-                "Province_State", "Country_Region", "lat", "long", "Combined_key",
-                as.character(as.Date(12:ncol(dta) - 12, origin = "2020/01/22")))
-dta <- subset(dta, !is.na(FIPS))
-dta$FIPS <- sprintf("%05d", dta$FIPS)
+
+## Loads count data from Github directly (Previously dta)
+count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
+names(count) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
+                  "Province_State", "Country_Region", "lat", "long", "Combined_key",
+                  as.character(as.Date(12:ncol(count) - 12, origin = "2020/01/22")))
+count <- subset(count, !is.na(FIPS))
+count$FIPS <- sprintf("%05d", count$FIPS)
 excl <- c("Alaska", "Hawaii", "American Samoa","Diamond Princess", "Grand Princess", "Guam", "Northern Mariana Islands", 
           "Puerto Rico", "Virgin Islands")
-dta <- subset(dta, !Province_State %in% excl & lat > 0)
-dta$UID <- dta$iso2 <- dta$iso3 <- dta$code3 <- dta$Country_Region <- dta$Combined_key <- NULL
-dta[,-(1:5)] <- t(apply(dta[,-(1:5)], 1, function(x) pmax(0, diff(c(0, x)))))
-row.names(dta) <- dta$FIPS
+count <- subset(count, !Province_State %in% excl & lat > 0)
+count$UID <- count$iso2 <- count$iso3 <- count$code3 <- count$Country_Region <- count$Combined_key <- NULL
+count[,-(1:5)] <- t(apply(count[,-(1:5)], 1, function(x) pmax(0, diff(c(0, x)))))
+row.names(count) <- count$FIPS
 
 ## Loads deaths data from Github directly
 death <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_US.csv"))
 names(death) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
-                "Province_State", "Country_Region", "lat", "long", "Combined_key",
-                as.character(as.Date(12:ncol(death) - 12, origin = "2020/01/22")))
+                  "Province_State", "Country_Region", "lat", "long", "Combined_key", "Population",
+                  as.character(as.Date(13:ncol(death) - 13, origin = "2020/01/22")))
 death <- subset(death, !is.na(FIPS))
 death$FIPS <- sprintf("%05d", death$FIPS)
 death <- subset(death, !Province_State %in% excl & lat > 0)
 death$UID <- death$iso2 <- death$iso3 <- death$code3 <- death$Country_Region <- death$Combined_key <- NULL
-death[,-(1:5)] <- t(apply(death[,-(1:5)], 1, function(x) pmax(0, diff(c(0, x)))))
+death[,-(1:6)] <- t(apply(death[,-(1:6)], 1, function(x) pmax(0, diff(c(0, x)))))
 row.names(death) <- death$FIPS
 
-## Data set up for county population
-pop <- read.csv("../Data/PopulationEstimates.csv")
-pop <- subset(pop, select = c(1, 20))
-colnames(pop) <- c("FIPS", "Pop_Estimate_2019") 
-pop$FIPS <- sprintf("%05d", pop$FIPS)
-pop$Pop_Estimate_2019 <- as.numeric(gsub(",", "", pop$Pop_Estimate_2019))
-pop <- merge(pop, dta, by = "FIPS") 
+## Date Specification Function
+selectdates <- function(data = death, start, end){
+  # Calculates Death Sums
+  keep <- data[, 1:6]
+  data <- data[, -c(1:6)]
+  tmp1 <- as.Date(names(data))
+  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
+  tmp <- data[, tmp2]
+  Death_Sum <- rowSums(tmp)
+  
+  # Uses count dataset to calculate Count_Sum and Perc_Sum
+  cdata <- count[, -c(1:5)]
+  ctmp1 <- as.Date(names(cdata))
+  ctmp2 <- which(ctmp1 >= as.Date(start) & ctmp1 <= as.Date(end))
+  ctmp <- cdata[, ctmp2]
+  
+  Count_Sum <- rowSums(ctmp)
+  Perc_Sum <- rowSums((ctmp[, 1:ncol(ctmp)]/keep[, 6]) * 100)
+  
+  tmp <- cbind(keep, Count_Sum, Perc_Sum, Death_Sum)
+  tmp$Population <- NULL
+  row.names(tmp) <- tmp$FIPS
+  return(tmp)
+}
 
 ## Loads SHP and DBF File
 covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
 coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")            
 coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
 covidshpstate <- read.shp("../Shape_Files/cb_2018_us_state_500k.shp")
-coviddbfstate <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")            
-
-## Date Specification Function
-selectdates <- function(data, start, end){
-  keep <- data[, 1:6]
-  data <- data[, -c(1:6)]
-  tmp1 <- as.Date(names(data))
-  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
-  tmp <- data[, tmp2]
-  Sum <- rowSums(tmp)
-  Perc_Sum <- rowSums(tmp[, 1:ncol(tmp)]/keep[, 2] * 100)
-  tmp <- cbind(keep, Sum, Perc_Sum)
-  tmp$Pop_Estimate_2019 <- NULL
-  row.names(tmp) <- tmp$FIPS
-  return(tmp)
-}
+coviddbfstate <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")   
 
 ## Default shape file
 ## Confirmed cases given dates
 covid.sp <- combine.data.shapefile(
-  data = selectdates(data = pop, start = Sys.Date() - 6, end = Sys.Date()),
+  data = selectdates(start = Sys.Date() - 6, end = Sys.Date()),
   shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
 ## Format popup data for leaflet map.
-pop_num <- prettyNum(covid.sp$Sum, big.mark = ',', preserve.width = "none")
+pop_num <- prettyNum(covid.sp$Count_Sum, big.mark = ',', preserve.width = "none")
 popup_dat <- paste0("<strong>County: </strong>", 
                     covid.sp$Admin2, 
                     "<br><strong>Value: </strong>", 
                     pop_num)
-colours <- colorNumeric(palette = "YlOrRd", covid.sp@data$Sum)
+colours <- colorNumeric(palette = "YlOrRd", covid.sp@data$Count_Sum)
 
 ## Options for loader
 options(spinner.color = "#0275D8", spinner.color.background = "white", spinner.size = 2)
@@ -91,7 +93,7 @@ map0 <-  leaflet(data = covid.sp) %>%
   addTiles() %>% 
   addPolygons(
     layerId = ~FIPS,
-    fillColor = ~ colours(Sum),
+    fillColor = ~ colours(Count_Sum),
     weight = 1,
     opacity = 0.7,
     color = "white",
@@ -106,7 +108,7 @@ map0 <-  leaflet(data = covid.sp) %>%
       bringToFront = TRUE)) %>%
   addLegend(
     pal = colours,
-    values = covid.sp@data$Sum,
+    values = covid.sp@data$Count_Sum,
     opacity = 1,
     title = "Count") %>%
   addScaleBar(position = "bottomleft")
@@ -121,7 +123,6 @@ ui <- fluidPage(
       }
     "))
   ),
-  
   
   ## Application title
   titlePanel("United States COVID-19 Mapping - County level"),
@@ -142,7 +143,8 @@ ui <- fluidPage(
     ),
     ## Display leaflet plot of cases
     mainPanel(
-      withSpinner(leafletOutput("casemap"), type = 4)
+      withSpinner(leafletOutput("casemap"), type = 4),
+      withSpinner(tableOutput('table'))
     )
   )
 )
@@ -173,28 +175,36 @@ server <- function(input, output, session) {
   output$casemap <- renderLeaflet(map0)    
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
-      df <- selectdates(data = pop, start = input$daterange[1], end = input$daterange[2])
-      df$Perc_Sum <- NULL
+      df <- selectdates(start = input$daterange[1], end = input$daterange[2])
+      df$Total <- df$Count_Sum
     } else if (input$typeChoice == "Percentage"){
-      df <- selectdates(data = pop, start = input$daterange[1], end = input$daterange[2])
-      df$Sum <- NULL
-      colnames(df)[6] <- "Sum"
+      df <- selectdates(start = input$daterange[1], end = input$daterange[2])
+      df$Total <- df$Perc_Sum
     } else {return(NULL)}
+    
     row.names(df) <- df$FIPS
     new.covid.sp <- covid.sp
-    new.covid.sp@data$Sum <- df$Sum
-    new.colours <- colorNumeric(palette = "YlOrRd", domain = new.covid.sp@data$Sum)
+    new.covid.sp@data$Total <- df$Total
+    new.colours <- colorNumeric(palette = "YlOrRd", domain = new.covid.sp@data$Total)
+    
     leafletProxy("casemap") %>% clearControls()
     leafletProxy("casemap", data = new.covid.sp) %>%
       setShapeStyle(
         layerId = ~FIPS,
-        fillColor = ~ new.colours(new.covid.sp@data$Sum)) %>%
+        fillColor = ~ new.colours(new.covid.sp@data$Total)) %>%
       addLegend(
         pal = new.colours,
-        values = new.covid.sp@data$Sum,
+        values = new.covid.sp@data$Total,
         opacity = 1,
-        title = "Count")        
+        title = "Count")
+    colnames(df) <- c("FIPS", "County", "State", "Latitude", "Longitude", "Case Sum", "Percent Sum", "Death Sum", "Variable of Interest")
+    output$table <- renderTable({
+      head(df)
+    })
   })
+  
+  
+  
 }
 
 ## Run the application 
