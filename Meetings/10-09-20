@@ -1,0 +1,11 @@
+** Questions: **
+1.
+
+** Meeting Discussion: **
+1. After merging the 'pop' dataset and the 'death' dataset together, I realized that the death dataset had a "Population" column that the original county dataset did not have.
+Because of this, I will be removing the external csv file containing the estimated county populations. After comparing the county population estimates from the csv file to those
+in the deaths dataset, I saw that the numbers were identical. Thus, it seems that the deaths dataset also used the 2019 population projections from the US census.  
+
+** To do list for this week: **
+
+** Links: **
