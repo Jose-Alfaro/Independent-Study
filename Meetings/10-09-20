@@ -1,5 +1,8 @@
 ** Questions: **
-1.
+1. What predictors should we include in the model? So far, the only two predictors I have included in our model are county population and death counts. We have discussed adding 
+non-linear predictors into the model such as a tweet sentiment analysis, but for now lets focus on predictors that we can grasp relatively quickly. I am considering adding a predictor
+with 2 factors which classifies each county as republican or democratic, what do you think? I would also like to add a predictor that accounts for the number of COVID tests a 
+county has taken, but this data seems to be very hard to find. I believe the CDC has something like this, but at the state and country level. 
 
 ** Meeting Discussion: **
 1. After merging the 'pop' dataset and the 'death' dataset together, I realized that the death dataset had a "Population" column that the original county dataset did not have.
