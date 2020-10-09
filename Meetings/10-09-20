@@ -3,7 +3,22 @@
 non-linear predictors into the model such as a tweet sentiment analysis, but for now lets focus on predictors that we can grasp relatively quickly. I am considering adding a predictor
 with 2 factors which classifies each county as republican or democratic, what do you think? I would also like to add a predictor that accounts for the number of COVID tests a 
 county has taken, but this data seems to be very hard to find. I believe the CDC has something like this, but at the state and country level. We could also add a predictor for
-the number of recovered cases in each county, but again, this data seems to be a bit hard to find. 
+the number of recovered cases in each county, but again, this data seems to be a bit hard to find. Possibly income data?
+2. Is it normal for spatial data to have a strong pattern in the residuals? To me, the answer clearly indicates to yes, but in the example in the vignette both the QQ plot and the
+residuals plot seemed to have improved drastically after taking the natural log transformation. This, however, could simply be an artifact of the dataset used. 
+
+** Notes: **
+1. I have temporarily commented out the removal of the county population column from our dataset so that we can include it as a predictor.
+2. When fitting the linear model Count_Sum = Population + Death_Sum, I noticed that the QQ plot was clearly not normal. Also, the residuals were heteroskedastic. However, when I fit the 
+linear model log(Count_Sum + 1) = Population + Death_Sum, the QQ-Plot drastically improved, but the residuals plot seemed to get worse. In the residual plot, the variance was smaller, 
+but there was clearly a strong trend. Nonetheless, I proceeded modeling with the log transformed data. Both of the predictors were significant at the alpha < 0.0001 level. 
+3. There are three counties with no neighbors. This will cause problems when determining spatial autocorrelations and modeling. I have temporarily removed them. The counties are:
+FIPS:    County:
+25007    Dukes, MA
+25019    Nantucket, MA
+53055    San Juan, WA
+
+4. Data tested positive for spatial correlation using Moran's I statistic (p-val = 0.000999).
 
 ** Meeting Discussion: **
 1. After merging the 'pop' dataset and the 'death' dataset together, I realized that the death dataset had a "Population" column that the original county dataset did not have.
