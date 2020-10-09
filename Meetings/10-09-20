@@ -6,6 +6,7 @@ county has taken, but this data seems to be very hard to find. I believe the CDC
 the number of recovered cases in each county, but again, this data seems to be a bit hard to find. Possibly income data?
 2. Is it normal for spatial data to have a strong pattern in the residuals? To me, the answer clearly indicates to yes, but in the example in the vignette both the QQ plot and the
 residuals plot seemed to have improved drastically after taking the natural log transformation. This, however, could simply be an artifact of the dataset used. 
+3. Consider calculating SIR (standardized incidence ratio) or SMR (Standardized Mortality Ratio) and using this as out predictor. This is the ratio of the observed over expected counts.
 
 ** Notes: **
 1. I have temporarily commented out the removal of the county population column from our dataset so that we can include it as a predictor.
