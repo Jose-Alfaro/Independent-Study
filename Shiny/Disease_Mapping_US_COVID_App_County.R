@@ -10,6 +10,7 @@ library(leaflet)
 library(rgdal)
 library(leaflet)
 library(shiny)
+library(shinycssloaders)
 
 
 ## Loads count data from Github directly (Previously dta)
@@ -113,8 +114,7 @@ map0 <-  leaflet(data = covid.sp) %>%
     title = "Count") %>%
   addScaleBar(position = "bottomleft")
 
-ui <- fluidPage(    
-  
+ui <- fluidPage(      
   tags$head(
     tags$style(HTML("
       .shiny-output-error-validation {
@@ -189,22 +189,21 @@ server <- function(input, output, session) {
     
     leafletProxy("casemap") %>% clearControls()
     leafletProxy("casemap", data = new.covid.sp) %>%
-      setShapeStyle(
-        layerId = ~FIPS,
-        fillColor = ~ new.colours(new.covid.sp@data$Total)) %>%
-      addLegend(
-        pal = new.colours,
-        values = new.covid.sp@data$Total,
-        opacity = 1,
-        title = "Count")
-    colnames(df) <- c("FIPS", "County", "State", "Latitude", "Longitude", "Case Sum", "Percent Sum", "Death Sum", "Variable of Interest")
+        setShapeStyle(
+            layerId = ~FIPS,
+            fillColor = ~ new.colours(new.covid.sp@data$Total)) %>%
+        addLegend(
+            pal = new.colours,
+            values = new.covid.sp@data$Total,
+            opacity = 1,
+            title = "Count")
+    colnames(df) <- c("FIPS", "County", "State", "Latitude", "Longitude",
+                      "Case Sum", "Percent Sum", "Death Sum", "Variable of Interest")
+    print(head(df))
     output$table <- renderTable({
-      head(df)
+        head(df[order(df[,ncol(df)], decreasing = TRUE),], 10)
     })
-  })
-  
-  
-  
+  })  
 }
 
 ## Run the application 
