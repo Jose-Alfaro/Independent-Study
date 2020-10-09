@@ -20,6 +20,7 @@ FIPS:    County:
 53055    San Juan, WA
 
 4. Data tested positive for spatial correlation using Moran's I statistic (p-val = 0.000999).
+5. I have added a dataset that has the median household income by county for 2018.
 
 ** Meeting Discussion: **
 1. After merging the 'pop' dataset and the 'death' dataset together, I realized that the death dataset had a "Population" column that the original county dataset did not have.
@@ -29,3 +30,4 @@ in the deaths dataset, I saw that the numbers were identical. Thus, it seems tha
 ** To do list for this week: **
 
 ** Links: **
+1. https://www.ers.usda.gov/data-products/county-level-data-sets/download-data/
