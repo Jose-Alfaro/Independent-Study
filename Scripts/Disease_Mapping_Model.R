@@ -13,7 +13,8 @@ library(shiny)
 library(shinycssloaders)
 library(kableExtra)
 library(spdep)
-
+library(GGally)
+library(coda)
 
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -172,7 +173,7 @@ Z.incomedep <- as.matrix(dist(income, diag = TRUE, upper = TRUE))
 formula <- Count_Sum ~ offset(log(Expected_Count + 1))
 chain1 <- S.CARdissimilarity(formula = formula, data = covid.sp@data,
                              family = "poisson", W = W, Z = list(Z.incomedep = Z.incomedep),
-                             W.binary = TRUE, burnin = 20000, n.sample = 100000, thin = 20)
+                             W.binary = TRUE, burnin = 10000, n.sample = 50000, thin = 10)
 
 ## Check to see if MC have convereged
 ## Method 1: Traceplots
@@ -186,6 +187,8 @@ print(chain1)
 
 ## Number and locations of boundaries
 border.locations <- chain1$localised.structure$W.posterior
+border.locations <- chain1$localised.structure$W.border.prob
+## border.locations <- ifelse(is.na(border.locations), 0, 1)
 
 ## Computes SIR
 covid.sp@data$risk <- chain1$fitted.values / covid.sp@data$Expected_Count
