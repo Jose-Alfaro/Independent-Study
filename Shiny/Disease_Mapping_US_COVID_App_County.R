@@ -39,6 +39,20 @@ death$UID <- death$iso2 <- death$iso3 <- death$code3 <- death$Country_Region <- 
 death[,-(1:6)] <- t(apply(death[,-(1:6)], 1, function(x) pmax(0, diff(c(0, x)))))
 row.names(death) <- death$FIPS
 
+## Loads unemployment/median income dataset
+income <- read.csv("../Data/Unemployment.csv")
+income <- income[, c(1, 87)]
+colnames(income) <- c("FIPS", "Income")
+income$FIPS <- sprintf("%05d", income$FIPS)
+income$Income <- as.numeric(gsub(",","",income$Income))
+
+## Loads County Political Affiliation Based on 2016 Election
+political <- read.csv("../Data/2016_US_County_Level_Presidential_Results.csv")
+colnames(political)[11] <- "FIPS"
+political$FIPS <- sprintf("%05d", political$FIPS)
+political$Party <- as.factor(ifelse(political$per_dem > political$per_gop, 1, 0))
+political <- political[, c(11, 12)]
+
 ## Date Specification Function
 selectdates <- function(data = death, start, end){
   # Calculates Death Sums
