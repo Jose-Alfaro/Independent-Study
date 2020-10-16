@@ -1,7 +1,3 @@
-## devtools::install_github("rstudio/leaflet")
-## devtools::install_github("edwindj/leaflet")
-## https://github.com/rstudio/leaflet/issues/496
-
 library(ggplot2)
 library(shapefiles)
 library(sp)
@@ -49,6 +45,13 @@ colnames(income) <- c("FIPS", "Income")
 income$FIPS <- sprintf("%05d", income$FIPS)
 income$Income <- as.numeric(gsub(",","",income$Income))
 
+## Loads County Political Affiliation Based on 2016 Election
+political <- read.csv("../Data/2016_US_County_Level_Presidential_Results.csv")
+colnames(political)[11] <- "FIPS"
+political$FIPS <- sprintf("%05d", political$FIPS)
+political$Party <- as.factor(ifelse(political$per_dem > political$per_gop, 1, 0))
+political <- political[, c(11, 12)]
+
 ## Date Specification Function
 selectdates <- function(data = death, start, end){
   # Calculates Death Sums
@@ -67,32 +70,45 @@ selectdates <- function(data = death, start, end){
   Count_Sum <- rowSums(ctmp)
   Perc_Sum <- rowSums((ctmp[, 1:ncol(ctmp)]/keep[, 6]) * 100)
   
-  # Mortality Rate by County
-  tmp_Death_Sum <- rowSums(data)
-  Mortality_Rate <- tmp_Death_Sum/keep[, 6]
-  Expected_Death <- Mortality_Rate * keep[, 6]
-  SMR <- Death_Sum/Expected_Death
-  
-  # Incidence Rate by County
-  tmp_count_sum <- rowSums(cdata)
-  Incidence_Rate <- tmp_count_sum/keep[, 6]
-  Expected_Count <- Incidence_Rate * keep[, 6]
-  SIR <- Count_Sum/Expected_Count
-  
+  # # Mortality Rate by County
+  # tmp_Death_Sum <- rowSums(data)
+  # Mortality_Rate <- tmp_Death_Sum/keep[, 6]
+  # Expected_Death <- Mortality_Rate * keep[, 6]
+  # SMR <- Death_Sum/Expected_Death
+  # 
+  # # Incidence Rate by County
+  # tmp_count_sum <- rowSums(cdata)
+  # Incidence_Rate <- tmp_count_sum/keep[, 6]
+  # Expected_Count <- Incidence_Rate * keep[, 6]
+  # SIR <- Count_Sum/Expected_Count
+  # 
   # Combines Datasets  
-  tmp <- cbind(keep, Count_Sum, Perc_Sum, Incidence_Rate, Expected_Count, SIR, Death_Sum, Mortality_Rate, Expected_Death, SMR)
-  #tmp$Population <- NULL
-  tmp[c("SMR", "SIR")][is.na(tmp[c("SMR", "SIR")])] <- 0
+  tmp <- cbind(keep, Count_Sum, Perc_Sum, Death_Sum)
   tmp <- merge(tmp, income, by = "FIPS")
+  tmp <- merge(tmp, political, by = "FIPS")
   tmp <- tmp[!(tmp$FIPS == 25007 | tmp$FIPS == 25019 | tmp$FIPS == 53055), ]
+  
+  # Calculates Expected Counts via Model
+  tmp$logcount <- log(tmp$Count_Sum + 1)
+  model1 <- lm(logcount ~ Population + Death_Sum + Income, data = tmp)
+  tmp$Expected_Count <- ceiling(exp(model1$fitted.values))
+  tmp$SIR <- tmp$Count_Sum/tmp$Expected_Count
+  
+  # Calculates Expected Death via Model
+  tmp$logdeath <- log(tmp$Death_Sum + 1)
+  model2 <- lm(logdeath ~ Population + Count_Sum + Income, data = tmp)
+  tmp$Expected_Death <- ceiling(exp(model2$fitted.values))
+  tmp$SMR <- tmp$Death_Sum/tmp$Expected_Death
+  
   row.names(tmp) <- tmp$FIPS
   return(tmp)
 }
 
+## Sample Dataset
 full <- selectdates(start = "2020-09-01", end = "2020-09-30")
 
 ## Identifying High-Risk Disease Clusters ##
-full <- full[, c(1, 4, 5, 6, 7, 10, 11, 12, 16)]
+full <- full[, c(1, 4, 5, 6, 7, 9, 10, 12, 13, 14)]
 
 ## Loads SHP and DBF File
 covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
@@ -148,7 +164,6 @@ par(mfrow = c(2,2))
 plot(model)
 
 ## Log Transformed
-full$logcount <- log(full$Count_Sum + 1)
 model1 <- lm(logcount ~ Population + Death_Sum + Income, data = full)
 par(mfrow = c(2,2))
 plot(model1)
@@ -180,10 +195,8 @@ chain1 <- S.CARdissimilarity(formula = formula, data = covid.sp@data,
 beta.samples <- mcmc.list(chain1$samples$beta)
 plot(beta.samples) # Plots for 3 covariates
 
-
 ## Note: This model represents the log risk surface with only an intercept term and random effects
 print(chain1)
-
 
 ## Number and locations of boundaries
 border.locations <- chain1$localised.structure$W.posterior
