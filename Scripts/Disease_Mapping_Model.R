@@ -7,10 +7,11 @@ library(rgdal)
 library(leaflet)
 library(shiny)
 library(shinycssloaders)
-library(kableExtra)
 library(spdep)
 library(GGally)
 library(coda)
+library(vcd)
+library(MASS)
 
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -88,24 +89,43 @@ selectdates <- function(data = death, start, end){
   tmp <- merge(tmp, political, by = "FIPS")
   tmp <- tmp[!(tmp$FIPS == 25007 | tmp$FIPS == 25019 | tmp$FIPS == 53055), ]
   
-  # Calculates Expected Counts via Model
-  tmp$logcount <- log(tmp$Count_Sum + 1)
-  model1 <- lm(logcount ~ Population + Death_Sum + Income, data = tmp)
-  tmp$Expected_Count <- ceiling(exp(model1$fitted.values))
-  tmp$SIR <- tmp$Count_Sum/tmp$Expected_Count
-  
-  # Calculates Expected Death via Model
-  tmp$logdeath <- log(tmp$Death_Sum + 1)
-  model2 <- lm(logdeath ~ Population + Count_Sum + Income, data = tmp)
-  tmp$Expected_Death <- ceiling(exp(model2$fitted.values))
-  tmp$SMR <- tmp$Death_Sum/tmp$Expected_Death
-  
+  # # Calculates Expected Counts via Model
+  # tmp$logcount <- log(tmp$Count_Sum + 1)
+  # model1 <- lm(logcount ~ Population + Death_Sum + Income, data = tmp)
+  # tmp$Expected_Count <- ceiling(exp(model1$fitted.values))
+  # tmp$SIR <- tmp$Count_Sum/tmp$Expected_Count
+  # 
+  # # Calculates Expected Death via Model
+  # tmp$logdeath <- log(tmp$Death_Sum + 1)
+  # model2 <- lm(logdeath ~ Population + Count_Sum + Income, data = tmp)
+  # tmp$Expected_Death <- ceiling(exp(model2$fitted.values))
+  # tmp$SMR <- tmp$Death_Sum/tmp$Expected_Death
+  # 
   row.names(tmp) <- tmp$FIPS
   return(tmp)
 }
 
 ## Sample Dataset
 full <- selectdates(start = "2020-09-01", end = "2020-09-30")
+
+## Calculating Expected Counts Via goodfit()
+fit1 <- goodfit(full$Count_Sum, type = "poisson", method = "ML")
+fit1
+summary(fit1) # Goodness of fit rejected
+
+fit2 <- goodfit(full$Count_Sum, type = "nbinomial", method = "ML")
+fit2
+summary(fit2) # Goodness of fit rejected
+
+## Calculating Expected Counts Via fitdistr
+fit3 <- fitdistr(full$Count_Sum, densfun = "negative binomial")
+fit3
+
+fit4 <- fitdistr(full$Count_Sum, densfun = "Poisson")
+fit4
+
+
+
 
 ## Identifying High-Risk Disease Clusters ##
 full <- full[, c(1, 4, 5, 6, 7, 9, 10, 12, 13, 14)]
@@ -201,7 +221,6 @@ print(chain1)
 ## Number and locations of boundaries
 border.locations <- chain1$localised.structure$W.posterior
 border.locations <- chain1$localised.structure$W.border.prob
-## border.locations <- ifelse(is.na(border.locations), 0, 1)
 
 ## Computes SIR
 covid.sp@data$risk <- chain1$fitted.values / covid.sp@data$Expected_Count
