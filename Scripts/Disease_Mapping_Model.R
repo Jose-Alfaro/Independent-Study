@@ -53,6 +53,8 @@ political$FIPS <- sprintf("%05d", political$FIPS)
 political$Party <- as.factor(ifelse(political$per_dem > political$per_gop, 1, 0))
 political <- political[, c(11, 12)]
 
+apply(death[,-(1:6)], function(x) summary(goodfit(x, type = 'nb')))
+
 ## Date Specification Function
 selectdates <- function(data = death, start, end){
   # Calculates Death Sums

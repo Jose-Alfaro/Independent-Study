@@ -98,3 +98,7 @@ map3 <- leaflet(data=respiratorydata.sp) %>%
     addScaleBar(position="bottomleft")
 map3
 
+chain1 <- S.CARdissimilarity(formula = observed ~ 1,
+                             data = respiratorydata.sp@data,
+                             family = "poisson", W = W, Z = list(Z.incomedep=Z.incomedep),
+                             W.binary = TRUE, burnin = 1000, n.sample = 3000, thin = 1)
