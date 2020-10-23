@@ -109,27 +109,6 @@ selectdates <- function(data = death, start, end){
 
 ## Sample Dataset
 full <- selectdates(start = "2020-09-01", end = "2020-09-30")
-
-## Calculating Expected Counts Via goodfit()
-fit1 <- goodfit(full$Count_Sum, type = "poisson", method = "ML")
-fit1
-summary(fit1) # Goodness of fit rejected
-
-fit2 <- goodfit(full$Count_Sum, type = "nbinomial", method = "ML")
-fit2
-summary(fit2) # Goodness of fit rejected
-
-## Calculating Expected Counts Via fitdistr
-fit3 <- fitdistr(full$Count_Sum, densfun = "negative binomial")
-fit3
-
-fit4 <- fitdistr(full$Count_Sum, densfun = "Poisson")
-fit4
-
-
-
-
-## Identifying High-Risk Disease Clusters ##
 full <- full[, c(1, 4, 5, 6, 7, 9, 10, 12, 13, 14)]
 
 ## Loads SHP and DBF File
@@ -142,8 +121,8 @@ coviddbfstate <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")
 ## Default shape file
 ## Confirmed cases given dates
 covid.sp <- combine.data.shapefile(
-  data = full,
-  shp = covidshp, dbf = coviddbf)
+    data = full,
+    shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
@@ -205,12 +184,14 @@ W <- nb2mat(W.nb, style="B")
 
 ## Creates Dissimilarity Matrix
 income <- covid.sp@data$Income
-Z.incomedep <- as.matrix(dist(income, diag = TRUE, upper = TRUE))
 
-formula <- Count_Sum ~ offset(log(Expected_Count + 1))
-chain1 <- S.CARdissimilarity(formula = formula, data = covid.sp@data,
-                             family = "poisson", W = W, Z = list(Z.incomedep = Z.incomedep),
-                             W.binary = TRUE, burnin = 10000, n.sample = 50000, thin = 10)
+Z <- lapply(c("Population", "Income", "Party"), function(x)
+    as.matrix(dist(full[,x], diag = TRUE, upper = TRUE)))
+           
+chain1 <- S.CARdissimilarity(formula = Count_Sum ~ 1,
+                             data = covid.sp@data,
+                             family = "poisson", W = W, Z = Z, 
+                             W.binary = TRUE, burnin = 1000, n.sample = 5000, thin = 2)
 
 ## Check to see if MC have convereged
 ## Method 1: Traceplots
@@ -222,10 +203,9 @@ print(chain1)
 
 ## Number and locations of boundaries
 border.locations <- chain1$localised.structure$W.posterior
-border.locations <- chain1$localised.structure$W.border.prob
 
 ## Computes SIR
-covid.sp@data$risk <- chain1$fitted.values / covid.sp@data$Expected_Count
+covid.sp@data$risk <- chain1$fitted.values
 covid.sp@data$fitted_counts <- chain1$fitted.values
 
 boundary.final <- highlight.borders(border.locations = border.locations,
