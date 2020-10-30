@@ -224,12 +224,20 @@ boundary.final <- highlight.borders(border.locations = border.locations,
 
 colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$risk)
 
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g Cases",
+  covid.sp$Admin2, covid.sp$Count_Sum
+) %>% lapply(htmltools::HTML)
+
 map3 <- leaflet(data = covid.sp) %>%
   addTiles() %>%
   addPolygons(fillColor = ~colours(risk), color = "", weight = 1,
-              fillOpacity = 0.7) %>%
+              fillOpacity = 0.7, label = labels, labelOptions = labelOptions(
+                style = list("font-weight" = "normal", padding = "3px 8px"),
+                textsize = "15px",
+                direction = "auto")) %>%
   addLegend(pal = colours, values = covid.sp@data$risk, opacity = 1,
-            title = "Fitted Vlaues") %>%
+            title = "Log Transformed Fitted Vlaues") %>%
   addCircles(lng = ~boundary.final$X, lat = ~boundary.final$Y, weight = 1,
              radius = 2) %>%
   addScaleBar(position = "bottomleft")
