@@ -53,8 +53,6 @@ political$FIPS <- sprintf("%05d", political$FIPS)
 political$Party <- as.factor(ifelse(political$per_dem > political$per_gop, 1, 0))
 political <- political[, c(11, 12)]
 
-apply(death[,-(1:6)], function(x) summary(goodfit(x, type = 'nb')))
-
 ## Date Specification Function
 selectdates <- function(data = death, start, end){
   # Calculates Death Sums
@@ -90,7 +88,7 @@ selectdates <- function(data = death, start, end){
   tmp <- merge(tmp, income, by = "FIPS")
   tmp <- merge(tmp, political, by = "FIPS")
   tmp <- tmp[!(tmp$FIPS == 25007 | tmp$FIPS == 25019 | tmp$FIPS == 53055), ]
-  
+  tmp$logcount <- log(1 + tmp$Count_Sum)
   # # Calculates Expected Counts via Model
   # tmp$logcount <- log(tmp$Count_Sum + 1)
   # model1 <- lm(logcount ~ Population + Death_Sum + Income, data = tmp)
@@ -109,7 +107,7 @@ selectdates <- function(data = death, start, end){
 
 ## Sample Dataset
 full <- selectdates(start = "2020-09-01", end = "2020-09-30")
-full <- full[, c(1, 4, 5, 6, 7, 9, 10, 12, 13, 14)]
+full <- full[, c(1, 2, 4, 5, 6, 7, 9, 10, 11, 12)]
 
 ## Loads SHP and DBF File
 covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
@@ -126,25 +124,33 @@ covid.sp <- combine.data.shapefile(
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
-## Format popup data for leaflet map.
-pop_num <- prettyNum(covid.sp$SIR, big.mark = ',', preserve.width = "none")
-popup_dat <- paste0("<strong>County: </strong>", 
-                    covid.sp$Admin2, 
-                    "<br><strong>Value: </strong>", 
-                    pop_num)
+# ## Format popup data for leaflet map.
+# pop_num <- prettyNum(covid.sp$SIR, big.mark = ',', preserve.width = "none")
+# popup_dat <- paste0("<strong>County: </strong>", 
+#                     covid.sp$Admin2, 
+#                     "<br><strong>Value: </strong>", 
+#                     pop_num)
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g Cases",
+  covid.sp$Admin2, covid.sp$Count_Sum
+) %>% lapply(htmltools::HTML)
 
-colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$SIR)
+colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$Count_Sum)
 map0 <-  leaflet(data = covid.sp) %>%
   addTiles() %>% 
   addPolygons(
     layerId = ~FIPS,
-    fillColor = ~ colours(SIR),
+    fillColor = ~ colours(covid.sp@data$Count_Sum),
     weight = 1,
     opacity = 0.7,
     color = "white",
     dashArray = '3',
     fillOpacity = 0.7,
-    popup = popup_dat,
+    label = labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"),
     highlight = highlightOptions(
       weight = 5,
       color = "#666",
@@ -153,9 +159,9 @@ map0 <-  leaflet(data = covid.sp) %>%
       bringToFront = TRUE)) %>%
   addLegend(
     pal = colours,
-    values = covid.sp@data$SIR,
+    values = covid.sp@data$Count_Sum,
     opacity = 1,
-    title = "SIR") %>%
+    title = "CaseCounts") %>%
   addScaleBar(position = "bottomleft")
 
 ## Linear regression model 
@@ -165,11 +171,11 @@ par(mfrow = c(2,2))
 plot(model)
 
 ## Log Transformed
-model1 <- lm(logcount ~ Population + Death_Sum + Income, data = full)
+model <- lm(logcount ~ Population + Death_Sum , data = full)
 par(mfrow = c(2,2))
-plot(model1)
+plot(model)
 
-ggpairs(data = full, c(9, 4, 7, 8))
+ggpairs(data = full, c(9, 4, 6, 7, 8))
 
 ## Test for Autocorrelation Using Moran's I statistic
 ## Null Hypothesis: No Spatial Autocorrelation
@@ -185,28 +191,33 @@ W <- nb2mat(W.nb, style="B")
 ## Creates Dissimilarity Matrix
 income <- covid.sp@data$Income
 
-Z <- lapply(c("Population", "Income", "Party"), function(x)
+Z <- lapply(c("Population", "Party"), function(x)
     as.matrix(dist(full[,x], diag = TRUE, upper = TRUE)))
            
-chain1 <- S.CARdissimilarity(formula = Count_Sum ~ 1,
+chain1 <- S.CARdissimilarity(formula = floor(sqrt(Count_Sum)) ~ 1,
                              data = covid.sp@data,
                              family = "poisson", W = W, Z = Z, 
-                             W.binary = TRUE, burnin = 1000, n.sample = 5000, thin = 2)
+                             W.binary = TRUE, burnin = 2000, n.sample = 10000, thin = 2)
+
+chain2 <- S.CARdissimilarity(formula = floor(logcount) ~ 1,
+                             data = covid.sp@data,
+                             family = "poisson", W = W, Z = Z, 
+                             W.binary = TRUE, burnin = 2000, n.sample = 10000, thin = 2)
 
 ## Check to see if MC have convereged
 ## Method 1: Traceplots
-beta.samples <- mcmc.list(chain1$samples$beta)
+beta.samples <- mcmc.list(chain2$samples$beta)
 plot(beta.samples) # Plots for 3 covariates
 
 ## Note: This model represents the log risk surface with only an intercept term and random effects
-print(chain1)
+print(chain2)
 
 ## Number and locations of boundaries
-border.locations <- chain1$localised.structure$W.posterior
+border.locations <- chain2$localised.structure$W.posterior
 
 ## Computes SIR
-covid.sp@data$risk <- chain1$fitted.values
-covid.sp@data$fitted_counts <- chain1$fitted.values
+covid.sp@data$risk <- chain2$fitted.values
+covid.sp@data$fitted_counts <- chain2$fitted.values
 
 boundary.final <- highlight.borders(border.locations = border.locations,
                                     spdata = covid.sp)
@@ -215,11 +226,11 @@ colours <- colorNumeric(palette = "YlOrRd", domain = covid.sp@data$risk)
 
 map3 <- leaflet(data = covid.sp) %>%
   addTiles() %>%
-  addPolygons(fillColor = ~colours(risk), color="", weight=1,
+  addPolygons(fillColor = ~colours(risk), color = "", weight = 1,
               fillOpacity = 0.7) %>%
   addLegend(pal = colours, values = covid.sp@data$risk, opacity = 1,
-            title="Risk") %>%
+            title = "Fitted Vlaues") %>%
   addCircles(lng = ~boundary.final$X, lat = ~boundary.final$Y, weight = 1,
              radius = 2) %>%
-  addScaleBar(position="bottomleft")
+  addScaleBar(position = "bottomleft")
 map3
