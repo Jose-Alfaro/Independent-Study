@@ -11,7 +11,7 @@ library(rgdal)
 library(leaflet)
 library(shiny)
 library(shinycssloaders)
-
+library(DT)
 
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -128,6 +128,7 @@ map0 <-  leaflet(data = covid.sp) %>%
     title = "Count") %>%
   addScaleBar(position = "bottomleft")
 
+## UI Function Begins
 ui <- fluidPage(      
   tags$head(
     tags$style(HTML("
@@ -163,6 +164,7 @@ ui <- fluidPage(
   )
 )
 
+## Server Function Begins
 server <- function(input, output, session) {
   
   observe({
@@ -175,7 +177,15 @@ server <- function(input, output, session) {
                            min = "2020-01-22",
                            max = Sys.Date())
     }
+    if((input$checkBox == T & input$daterange[1] != "2020-01-22") | (input$checkBox == T & input$daterange[2] != Sys.Date())){
+      updateCheckboxInput(
+        session =  session,
+        inputId =  "checkBox", 
+        value = FALSE
+      )
+    }
   })
+  
   
   output$dateCheck <- renderText({
     validate(
@@ -186,7 +196,8 @@ server <- function(input, output, session) {
     )
   })
   
-  output$casemap <- renderLeaflet(map0)    
+  output$casemap <- renderLeaflet(map0)
+  # output$table <- renderTable(table0)
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
       df <- selectdates(start = input$daterange[1], end = input$daterange[2])
@@ -211,13 +222,21 @@ server <- function(input, output, session) {
             values = new.covid.sp@data$Total,
             opacity = 1,
             title = "Count")
+    
     colnames(df) <- c("FIPS", "County", "State", "Latitude", "Longitude",
-                      "Case Sum", "Percent Sum", "Death Sum", "Variable of Interest")
-    print(head(df))
+                      "Case Count", "Percent Sum", "Death Count", "Variable of Interest")
+    
+    df <- df[, -c(1, 4, 5, 9)]
+    df$`Case Count` <- as.integer(df$`Case Count`)
+    df$`Death Count` <- as.integer(df$`Death Count`)
+    
     output$table <- renderTable({
-        head(df[order(df[,ncol(df)], decreasing = TRUE),], 10)
+      head(df[order(df$`Case Count`, decreasing = TRUE),], 10)
     })
+    
   })  
+  
+  
 }
 
 ## Run the application 
