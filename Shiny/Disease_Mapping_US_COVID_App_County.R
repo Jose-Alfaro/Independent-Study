@@ -104,6 +104,11 @@ colours <- colorNumeric(palette = "YlOrRd", covid.sp@data$Count_Sum)
 ## Options for loader
 options(spinner.color = "#0275D8", spinner.color.background = "white", spinner.size = 2)
 
+labels <- sprintf(
+  "<strong>%s</strong><br/>%g Cases",
+  covid.sp$Admin2, covid.sp$Count_Sum
+) %>% lapply(htmltools::HTML)
+
 map0 <-  leaflet(data = covid.sp) %>%
   addTiles() %>% 
   addPolygons(
@@ -120,7 +125,10 @@ map0 <-  leaflet(data = covid.sp) %>%
       color = "#666",
       dashArray = "",
       fillOpacity = 0.7,
-      bringToFront = TRUE)) %>%
+      bringToFront = TRUE), label = labels, labelOptions = labelOptions(
+        style = list("font-weight" = "normal", padding = "3px 8px"),
+        textsize = "15px",
+        direction = "auto")) %>%
   addLegend(
     pal = colours,
     values = covid.sp@data$Count_Sum,
@@ -128,8 +136,17 @@ map0 <-  leaflet(data = covid.sp) %>%
     title = "Count") %>%
   addScaleBar(position = "bottomleft")
 
+## Creates Initial Table
+tbl_dta <- covid.sp@data
+colnames(tbl_dta) <- c("FIPS", "County", "State", "Latitude", "Longitude",
+                       "Case Count", "Percent Sum", "Death Count")
+tbl_dta <- tbl_dta[, -c(1, 4, 5)]
+tbl_dta$`Case Count` <- as.integer(tbl_dta$`Case Count`)
+tbl_dta$`Death Count` <- as.integer(tbl_dta$`Death Count`)
+table0 <- head(tbl_dta[order(tbl_dta$`Case Count`, decreasing = TRUE),], 10)
+
 ## UI Function Begins
-ui <- fluidPage(      
+ui <- fluidPage(
   tags$head(
     tags$style(HTML("
       .shiny-output-error-validation {
@@ -140,34 +157,51 @@ ui <- fluidPage(
   ),
   
   ## Application title
-  titlePanel("United States COVID-19 Mapping - County level"),
+  titlePanel("United States COVID-19 Mapping - County Level"),
   tags$em("By: Jose Alfaro"),
   tags$hr(),
-  ## Sidebar with a slider input for number of bins 
-  sidebarLayout(
-    sidebarPanel(
-      dateRangeInput("daterange", "Date Range:",
-                     start = as.character(Sys.Date() - 6),
-                     end = as.character(Sys.Date()),
-                     min = "2020-01-22",
-                     max = Sys.Date()),
-      checkboxInput("checkBox", "Select all dates", FALSE),
-      textOutput("dateCheck"),
-      selectInput("typeChoice", "Data Type:", choices = c("Raw", "Percentage")),
-      actionButton("submitButton", "Submit", class = "btn btn-primary")
+  
+  ## Map Panel
+  tabsetPanel(
+    tabPanel("Map", fluid = TRUE,
+             sidebarLayout(
+               sidebarPanel(
+                 dateRangeInput("daterange", "Date Range:",
+                                start = as.character(Sys.Date() - 6),
+                                end = as.character(Sys.Date()),
+                                min = "2020-01-22",
+                                max = Sys.Date()),
+                 checkboxInput("checkBox", "Select all dates", FALSE),
+                 textOutput("dateCheck"),
+                 selectInput("typeChoice", "Data Type:", choices = c("Raw", "Percentage")),
+                 actionButton("submitButton", "Submit", class = "btn btn-primary")
+               ),
+               mainPanel(
+                 withSpinner(leafletOutput("casemap"), type = 4),
+                 withSpinner(tableOutput('table'))
+               )
+             )
     ),
-    ## Display leaflet plot of cases
-    mainPanel(
-      withSpinner(leafletOutput("casemap"), type = 4),
-      withSpinner(tableOutput('table'))
+    
+    ## Animation Pannel
+    tabPanel("Animation", fluid = TRUE,
+             sidebarLayout(
+               sidebarPanel(
+                 
+               ),
+               mainPanel(
+                 
+               )
+             )
     )
   )
 )
 
 ## Server Function Begins
 server <- function(input, output, session) {
-  
+  DF1 <- reactiveValues(data = NULL)
   observe({
+    DF1$data <- table0
     if (input$checkBox == TRUE){
       updateDateRangeInput(session,
                            "daterange",
@@ -196,8 +230,10 @@ server <- function(input, output, session) {
     )
   })
   
+  ## Displays Initial Map and Table
   output$casemap <- renderLeaflet(map0)
-  # output$table <- renderTable(table0)
+  output$table <- renderTable(DF1$data)
+  
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
       df <- selectdates(start = input$daterange[1], end = input$daterange[2])
@@ -212,16 +248,21 @@ server <- function(input, output, session) {
     new.covid.sp@data$Total <- df$Total
     new.colours <- colorNumeric(palette = "YlOrRd", domain = new.covid.sp@data$Total)
     
-    leafletProxy("casemap") %>% clearControls()
+    labels <- sprintf(
+      "<strong>%s</strong><br/>%g Cases",
+      new.covid.sp$Admin2, new.covid.sp$Count_Sum
+    ) %>% lapply(htmltools::HTML)
+    
+    leafletProxy("casemap") %>% clearControls() %>% clearMarkers()
     leafletProxy("casemap", data = new.covid.sp) %>%
-        setShapeStyle(
-            layerId = ~FIPS,
-            fillColor = ~ new.colours(new.covid.sp@data$Total)) %>%
-        addLegend(
-            pal = new.colours,
-            values = new.covid.sp@data$Total,
-            opacity = 1,
-            title = "Count")
+      setShapeStyle(
+        layerId = ~FIPS,
+        fillColor = ~ new.colours(new.covid.sp@data$Total)) %>%
+      addLegend(
+        pal = new.colours,
+        values = new.covid.sp@data$Total,
+        opacity = 1,
+        title = "Count")
     
     colnames(df) <- c("FIPS", "County", "State", "Latitude", "Longitude",
                       "Case Count", "Percent Sum", "Death Count", "Variable of Interest")
@@ -230,10 +271,7 @@ server <- function(input, output, session) {
     df$`Case Count` <- as.integer(df$`Case Count`)
     df$`Death Count` <- as.integer(df$`Death Count`)
     
-    output$table <- renderTable({
-      head(df[order(df$`Case Count`, decreasing = TRUE),], 10)
-    })
-    
+    DF1$data <- head(df[order(df$`Case Count`, decreasing = TRUE),], 10)
   })  
   
   
