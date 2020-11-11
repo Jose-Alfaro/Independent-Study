@@ -184,6 +184,9 @@ tp <- ggplot(data = tempanimatedf, aes(x = Date)) +
   theme(legend.position = "bottom") + 
   transition_reveal(Date)
 
+gganimate::anim_save("outfile.gif", gganimate::animate(tp, fps = 5, nframes = 60))
+
+
 ## UI Function Begins
 ui <- fluidPage(
   tags$head(
@@ -273,8 +276,7 @@ server <- function(input, output, session) {
   output$casemap <- renderLeaflet(map0)
   output$table <- renderTable(DF1$data)
   output$animation <- renderImage({
-    outfile <- tempfile(fileext='.gif')
-    gganimate::anim_save("outfile.gif", gganimate::animate(tp, fps = 5, nframes = 60))
+
     list(src = "outfile.gif",
          contentType = 'image/gif'
     )
@@ -345,9 +347,6 @@ server <- function(input, output, session) {
       # Return a list containing the filename
       list(src = "outfile.gif",
            contentType = 'image/gif'
-           # width = 400,
-           # height = 300,
-           # alt = "This is alternate text"
       )
     }, deleteFile = TRUE)
     
