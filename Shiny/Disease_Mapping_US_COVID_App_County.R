@@ -170,6 +170,20 @@ tbl_dta$`Case Count` <- as.integer(tbl_dta$`Case Count`)
 tbl_dta$`Death Count` <- as.integer(tbl_dta$`Death Count`)
 table0 <- head(tbl_dta[order(tbl_dta$`Case Count`, decreasing = TRUE),], 10)
 
+## Creates Initial Animation
+tempanimatedf <- animateDates(start = Sys.Date() - 6, end = Sys.Date()) 
+tp <- ggplot(data = tempanimatedf, aes(x = Date)) +
+  geom_line(aes(y = Daily_Count, color = "Count"), size = 1.25, show.legend = T) +
+  geom_line(aes(y = Daily_Death, color = "Death"), size = 1.25) +
+  ggtitle("COVID-19 Cases and Deaths in US") +
+  scale_x_date(date_labels = "%b %d") +
+  ylab("Count") +
+  scale_color_manual(values = c('Count' = 'steelblue', 'Death' = 'darkred')) +
+  labs(color = "") +
+  theme_bw() +
+  theme(legend.position = "bottom") + 
+  transition_reveal(Date)
+
 ## UI Function Begins
 ui <- fluidPage(
   tags$head(
@@ -258,6 +272,13 @@ server <- function(input, output, session) {
   ## Displays Initial Map and Table
   output$casemap <- renderLeaflet(map0)
   output$table <- renderTable(DF1$data)
+  output$animation <- renderImage({
+    outfile <- tempfile(fileext='.gif')
+    gganimate::anim_save("outfile.gif", gganimate::animate(tp, fps = 5, nframes = 60))
+    list(src = "outfile.gif",
+         contentType = 'image/gif'
+    )
+  }, deleteFile = TRUE)
   
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
@@ -319,7 +340,7 @@ server <- function(input, output, session) {
         transition_reveal(Date)
       
       
-      gganimate::anim_save("outfile.gif", gganimate::animate(p)) # New
+      gganimate::anim_save("outfile.gif", gganimate::animate(p, fps = 5, nframes = 60)) # New
       
       # Return a list containing the filename
       list(src = "outfile.gif",
