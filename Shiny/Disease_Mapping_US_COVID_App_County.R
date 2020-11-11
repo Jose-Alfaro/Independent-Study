@@ -15,7 +15,6 @@ library(DT)
 library(gganimate)
 library(ggthemes)
 
-setwd("C:/Users/josea/Desktop/Independent Study/Shiny App")
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
 names(count) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
