@@ -12,7 +12,10 @@ library(leaflet)
 library(shiny)
 library(shinycssloaders)
 library(DT)
+library(gganimate)
+library(ggthemes)
 
+setwd("C:/Users/josea/Desktop/Independent Study/Shiny App")
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
 names(count) <- c("UID", "iso2", "iso3", "code3", "FIPS", "Admin2",
@@ -75,6 +78,29 @@ selectdates <- function(data = death, start, end){
   tmp <- cbind(keep, Count_Sum, Perc_Sum, Death_Sum)
   tmp$Population <- NULL
   row.names(tmp) <- tmp$FIPS
+  return(tmp)
+}
+
+## Calculates Daily Sum for Aimation
+animateDates <- function(data = death, start, end){
+  # Calculates Daily Death Counts
+  data <- data[, -c(1:6)]
+  tmp1 <- as.Date(names(data))
+  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
+  tmp <- data[, tmp2]
+  Daily_Death <- colSums(tmp)
+  
+  # Calcualtes Daily Counts
+  cdata <- count[, -c(1:5)]
+  ctmp1 <- as.Date(names(cdata))
+  ctmp2 <- which(ctmp1 >= as.Date(start) & ctmp1 <= as.Date(end))
+  ctmp <- cdata[, ctmp2]
+  Daily_Count <- colSums(ctmp)
+  
+  tmp <- cbind(Daily_Count, Daily_Death)
+  tmp <- data.frame(Date = row.names(tmp), tmp)
+  rownames(tmp) <- NULL
+  tmp$Date <- as.Date(tmp$Date)
   return(tmp)
 }
 
@@ -190,7 +216,7 @@ ui <- fluidPage(
                  
                ),
                mainPanel(
-                 
+                 withSpinner(imageOutput("animation"))
                )
              )
     )
@@ -237,9 +263,11 @@ server <- function(input, output, session) {
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
       df <- selectdates(start = input$daterange[1], end = input$daterange[2])
+      animatedf <- animateDates(start = input$daterange[1], end = input$daterange[2])
       df$Total <- df$Count_Sum
     } else if (input$typeChoice == "Percentage"){
       df <- selectdates(start = input$daterange[1], end = input$daterange[2])
+      animatedf <- animateDates(start = input$daterange[1], end = input$daterange[2])
       df$Total <- df$Perc_Sum
     } else {return(NULL)}
     
@@ -272,9 +300,38 @@ server <- function(input, output, session) {
     df$`Death Count` <- as.integer(df$`Death Count`)
     
     DF1$data <- head(df[order(df$`Case Count`, decreasing = TRUE),], 10)
+    
+    output$animation <- renderImage({
+      # A temp file to save the output.
+      # This file will be removed later by renderImage
+      outfile <- tempfile(fileext='.gif')
+      
+      # now make the animation
+      p <- ggplot(data = animatedf, aes(x = Date)) +
+        geom_line(aes(y = Daily_Count, color = "Count"), size = 1.25, show.legend = T) +
+        geom_line(aes(y = Daily_Death, color = "Death"), size = 1.25) +
+        ggtitle("COVID-19 Cases and Deaths in US") +
+        scale_x_date(date_labels = "%b %d") +
+        ylab("Count") +
+        scale_color_manual(values = c('Count' = 'steelblue', 'Death' = 'darkred')) +
+        labs(color = "") +
+        theme_bw() +
+        theme(legend.position = "bottom") + 
+        transition_reveal(Date)
+      
+      
+      gganimate::anim_save("outfile.gif", gganimate::animate(p)) # New
+      
+      # Return a list containing the filename
+      list(src = "outfile.gif",
+           contentType = 'image/gif'
+           # width = 400,
+           # height = 300,
+           # alt = "This is alternate text"
+      )
+    }, deleteFile = TRUE)
+    
   })  
-  
-  
 }
 
 ## Run the application 
