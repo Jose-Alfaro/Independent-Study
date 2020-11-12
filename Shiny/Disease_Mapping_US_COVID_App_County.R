@@ -14,6 +14,7 @@ library(shinycssloaders)
 library(DT)
 library(gganimate)
 library(ggthemes)
+library(tidyr)
 
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -186,6 +187,61 @@ tp <- ggplot(data = tempanimatedf, aes(x = Date)) +
 
 gganimate::anim_save("outfile.gif", gganimate::animate(tp, fps = 5, nframes = 60))
 
+## Bar Animation
+bardta <- count[, -c(1, 3:5)]
+bardta <- pivot_longer(bardta, cols = -Admin2, 
+                       names_to = c("year", "month", "day"), names_sep = "-")
+bardta <- transform(bardta, YearMonth = paste0(year, month))
+bardta <- bardta[, -c(2:4)]
+bardta <- aggregate(value ~ Admin2 + YearMonth, data=bardta, FUN=sum)
+
+bar_formatted <- bardta %>%
+  group_by(YearMonth) %>%
+  # The * 1 makes it possible to have non-integer ranks while sliding
+  mutate(rank = rank(-value),
+         Value_rel = value/value[rank==1],
+         Value_lbl = paste0(" ",round(value/1e9))) %>%
+  group_by(Admin2) %>% 
+  filter(rank <=10) %>%
+  ungroup()
+
+staticplot = ggplot(bar_formatted, aes(rank, group = Admin2, 
+                                       fill = as.factor(Admin2), color = as.factor(Admin2))) +
+  geom_tile(aes(y = value/2,
+                height = value,
+                width = 0.9), alpha = 0.8, color = NA) +
+  geom_text(aes(y = 0, label = paste(Admin2, " ")), vjust = 0.2, hjust = 1) +
+  geom_text(aes(y=value,label = value, hjust=0)) +
+  coord_flip(clip = "off", expand = FALSE) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_reverse() +
+  guides(color = FALSE, fill = FALSE) +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        legend.position="none",
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major.x = element_line( size=.1, color="grey" ),
+        panel.grid.minor.x = element_line( size=.1, color="grey" ),
+        plot.title=element_text(size=25, hjust=0.5, face="bold", colour="grey", vjust=-1),
+        plot.subtitle=element_text(size=18, hjust=0.5, face="italic", color="grey"),
+        plot.caption =element_text(size=8, hjust=0.5, face="italic", color="grey"),
+        plot.background=element_blank(),
+        plot.margin = margin(2,2, 2, 4, "cm"))
+
+anim = staticplot + transition_states(YearMonth, transition_length = 4, state_length = 1) +
+  view_follow(fixed_x = TRUE)  +
+  labs(title = 'COVID-19 Cases by Month: {closest_state}',  
+       subtitle  =  "Top 10 Counties",
+       caption  = "COVID-19 Cases in the US | Data Source: Johns Hopkins University")
+
+gganimate::anim_save("baranimation.gif", gganimate::animate(anim, fps = 5, nframes = 60))
 
 ## UI Function Begins
 ui <- fluidPage(
@@ -232,7 +288,8 @@ ui <- fluidPage(
                  
                ),
                mainPanel(
-                 withSpinner(imageOutput("animation"))
+                 withSpinner(imageOutput("animation")),
+                 withSpinner(imageOutput("barAnimation"))
                )
              )
     )
@@ -276,8 +333,15 @@ server <- function(input, output, session) {
   output$casemap <- renderLeaflet(map0)
   output$table <- renderTable(DF1$data)
   output$animation <- renderImage({
-
+    
     list(src = "outfile.gif",
+         contentType = 'image/gif'
+    )
+  }, deleteFile = TRUE)
+  
+  output$barAnimation <- renderImage({
+    
+    list(src = "baranimation.gif",
          contentType = 'image/gif'
     )
   }, deleteFile = TRUE)
