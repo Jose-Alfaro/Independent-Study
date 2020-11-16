@@ -15,6 +15,7 @@ library(DT)
 library(gganimate)
 library(ggthemes)
 library(tidyr)
+library(tidyverse)
 
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -102,6 +103,41 @@ animateDates <- function(data = death, start, end){
   rownames(tmp) <- NULL
   tmp$Date <- as.Date(tmp$Date)
   return(tmp)
+}
+
+## Function for Top 5 Counties with Highest Deaths/Counts
+animateTop <- function(start = Sys.Date() - 6, end = Sys.Date()){
+  # Top Counts
+  countdata <- count[, -c(1:5)]
+  keep <- count[, 1:2]
+  tmp1 <- as.Date(names(countdata))
+  tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
+  tmp <- countdata[, tmp2]
+  Case_Count <- rowSums(tmp)
+  
+  Top_Case_Count <- head(sort(Case_Count, decreasing = T))
+  counttmp <- cbind(keep, tmp)
+  final_case_count <- counttmp[counttmp$FIPS == names(Top_Case_Count[1]) | counttmp$FIPS == names(Top_Case_Count[2]) | counttmp$FIPS == names(Top_Case_Count[3]) | counttmp$FIPS == names(Top_Case_Count[4]) | counttmp$FIPS == names(Top_Case_Count[5]),]
+  final_case_count <- final_case_count[, -1]
+  final_case_count <- as.data.frame(pivot_longer(final_case_count, cols = -Admin2, 
+                                                 names_to = "Date"))
+  final_case_count$Date <- as.Date(final_case_count$Date)
+  
+  # Top Deaths
+  deathdata <- death[, -c(1:6)]
+  deathkeep <- death[, 1:2]
+  dtmp <- deathdata[, tmp2]
+  Death_Count <- rowSums(dtmp)
+  
+  Top_Death_Count <- head(sort(Death_Count, decreasing = T))
+  deathtmp <- cbind(deathkeep, dtmp)
+  final_death_count <- deathtmp[deathtmp$FIPS == names(Top_Death_Count[1]) | deathtmp$FIPS == names(Top_Death_Count[2]) | deathtmp$FIPS == names(Top_Death_Count[3]) | deathtmp$FIPS == names(Top_Death_Count[4]) | deathtmp$FIPS == names(Top_Death_Count[5]),]
+  final_death_count <- final_death_count[, -1]
+  final_death_count <- as.data.frame(pivot_longer(final_death_count, cols = -Admin2, 
+                                                  names_to = "Date"))
+  final_death_count$Date <- as.Date(final_death_count$Date)
+  
+  return(list(cases = final_case_count, deaths = final_death_count))
 }
 
 ## Loads SHP and DBF File
@@ -196,22 +232,23 @@ bardta <- bardta[, -c(2:4)]
 bardta <- aggregate(value ~ Admin2 + YearMonth, data=bardta, FUN=sum)
 
 bar_formatted <- bardta %>%
-  group_by(YearMonth) %>%
+  dplyr::group_by(YearMonth) %>%
   # The * 1 makes it possible to have non-integer ranks while sliding
   mutate(rank = rank(-value),
          Value_rel = value/value[rank==1],
          Value_lbl = paste0(" ",round(value/1e9))) %>%
-  group_by(Admin2) %>% 
+  dplyr::group_by(Admin2) %>% 
   filter(rank <=10) %>%
   ungroup()
 
-staticplot = ggplot(bar_formatted, aes(rank, group = Admin2, 
+staticplot <- ggplot(bar_formatted, aes(rank, group = Admin2, 
                                        fill = as.factor(Admin2), color = as.factor(Admin2))) +
+  # coord_flip() + 
   geom_tile(aes(y = value/2,
                 height = value,
                 width = 0.9), alpha = 0.8, color = NA) +
   geom_text(aes(y = 0, label = paste(Admin2, " ")), vjust = 0.2, hjust = 1) +
-  geom_text(aes(y=value,label = value, hjust=0)) +
+  geom_text(aes(y = value,label = value, hjust=0)) + 
   coord_flip(clip = "off", expand = FALSE) +
   scale_y_continuous(labels = scales::comma) +
   scale_x_reverse() +
@@ -235,13 +272,44 @@ staticplot = ggplot(bar_formatted, aes(rank, group = Admin2,
         plot.background=element_blank(),
         plot.margin = margin(2,2, 2, 4, "cm"))
 
-anim = staticplot + transition_states(YearMonth, transition_length = 4, state_length = 1) +
+anim <- staticplot + transition_states(YearMonth, transition_length = 4, state_length = 1) +
   view_follow(fixed_x = TRUE)  +
   labs(title = 'COVID-19 Cases by Month: {closest_state}',  
        subtitle  =  "Top 10 Counties",
        caption  = "COVID-19 Cases in the US | Data Source: Johns Hopkins University")
 
-gganimate::anim_save("baranimation.gif", gganimate::animate(anim, fps = 5, nframes = 60))
+suppressWarnings(print(gganimate::anim_save("baranimation.gif", gganimate::animate(anim, fps = 5, nframes = 60))))
+
+remove <- c("Alaska", "Hawaii")
+state.names <- state.name[!state.name %in% remove]
+
+## Initial Case Animation
+animdta <- animateCases(start = "2020-01-22", end = Sys.Date())
+
+staticplot2 <- ggplot(animdta$cases, aes(x = Date, y = value, group = Admin2, colour = Admin2)) +
+  geom_line(lwd = 1.05) +
+  scale_colour_discrete(guide = 'none') +
+  scale_x_date(expand = c(0.1, 0)) +
+  scale_y_continuous("Confirmed Cases") +
+  geom_dl(aes(label = Admin2), method = list(dl.trans(x = x + 0.2), "last.points", cex = 0.8)) +
+  geom_dl(aes(label = Admin2), method = list(dl.trans(x = x - 0.2), "first.points", cex = 0.8)) +
+  ggtitle("Counties With Most Cases") +
+  transition_reveal(Date)
+
+gganimate::anim_save("caseanimation.gif", gganimate::animate(staticplot2, fps = 5, nframes = 60))
+
+## Initial Death Animation
+staticplot3 <- ggplot(animdta$deaths, aes(x = Date, y = value, group = Admin2, colour = Admin2)) +
+  geom_line(lwd = 1.05) +
+  scale_colour_discrete(guide = 'none') +
+  scale_x_date(expand = c(0.1, 0)) +
+  scale_y_continuous("Deaths") +
+  geom_dl(aes(label = Admin2), method = list(dl.trans(x = x + 0.2), "last.points", cex = 0.8)) +
+  geom_dl(aes(label = Admin2), method = list(dl.trans(x = x - 0.2), "first.points", cex = 0.8)) +
+  ggtitle("Counties With Most Deaths") +
+  transition_reveal(Date)
+
+gganimate::anim_save("deathanimation.gif", gganimate::animate(staticplot3, fps = 5, nframes = 60))
 
 ## UI Function Begins
 ui <- fluidPage(
@@ -261,7 +329,7 @@ ui <- fluidPage(
   
   ## Map Panel
   tabsetPanel(
-    tabPanel("Map", fluid = TRUE,
+    tabPanel("County Level", fluid = TRUE,
              sidebarLayout(
                sidebarPanel(
                  dateRangeInput("daterange", "Date Range:",
@@ -276,20 +344,31 @@ ui <- fluidPage(
                ),
                mainPanel(
                  withSpinner(leafletOutput("casemap"), type = 4),
-                 withSpinner(tableOutput('table'))
+                 withSpinner(tableOutput('table')),
+                 withSpinner(imageOutput("caseAnimation")),
+                 withSpinner(imageOutput('deathAnimation'))
                )
              )
     ),
-    
     ## Animation Pannel
-    tabPanel("Animation", fluid = TRUE,
-             sidebarLayout(
+    tabPanel("Animations", fluid = TRUE,
+             sidebarLayout(fluid = TRUE,
                sidebarPanel(
-                 
+                 selectInput("stateChoiceAnimation", "Select State:", choices = state.names), 
+                 dateRangeInput("daterangeAnimation", "Date Range:",
+                                start = as.character(Sys.Date() - 6),
+                                end = as.character(Sys.Date()),
+                                min = "2020-01-22",
+                                max = Sys.Date()),
+                 checkboxInput("checkBoxAnimation", "Select all dates", FALSE),
+                 textOutput("dateCheckAnimation"),
+                 actionButton("submitButtonAnimation", "Submit", class = "btn btn-primary")
                ),
                mainPanel(
-                 withSpinner(imageOutput("animation")),
-                 withSpinner(imageOutput("barAnimation"))
+                 splitLayout(
+                   withSpinner(imageOutput("animation")),
+                   withSpinner(imageOutput("barAnimation"))
+                )
                )
              )
     )
@@ -342,6 +421,20 @@ server <- function(input, output, session) {
   output$barAnimation <- renderImage({
     
     list(src = "baranimation.gif",
+         contentType = 'image/gif'
+    )
+  }, deleteFile = TRUE)
+  
+  output$caseAnimation <- renderImage({
+    
+    list(src = "caseanimation.gif",
+         contentType = 'image/gif'
+    )
+  }, deleteFile = TRUE)
+  
+  output$deathAnimation <- renderImage({
+    
+    list(src = "deathanimation.gif",
          contentType = 'image/gif'
     )
   }, deleteFile = TRUE)
