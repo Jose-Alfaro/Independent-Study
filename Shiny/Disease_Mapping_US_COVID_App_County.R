@@ -11,11 +11,13 @@ library(rgdal)
 library(leaflet)
 library(shiny)
 library(shinycssloaders)
+library(shinythemes)
 library(DT)
 library(gganimate)
 library(ggthemes)
 library(tidyr)
 library(tidyverse)
+library(directlabels)
 
 ## Loads count data from Github directly (Previously dta)
 count <- read.csv(url("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv"))
@@ -57,6 +59,10 @@ political$FIPS <- sprintf("%05d", political$FIPS)
 political$Party <- as.factor(ifelse(political$per_dem > political$per_gop, 1, 0))
 political <- political[, c(11, 12)]
 
+## Creates State names
+remove <- c("Alaska", "Hawaii")
+state.names <- state.name[!state.name %in% remove]
+
 ## Date Specification Function
 selectdates <- function(data = death, start, end){
   # Calculates Death Sums
@@ -83,16 +89,20 @@ selectdates <- function(data = death, start, end){
 }
 
 ## Calculates Daily Sum for Aimation
-animateDates <- function(data = death, start, end){
+animateDates <- function(data = death, start, end, state = "US"){
   # Calculates Daily Death Counts
-  data <- data[, -c(1:6)]
+  tmp <- subset(data, Province_State == state)
+  ifelse(dim(tmp)[1] == 0, tmp <- data, "error")
+  data <- tmp[, -c(1:6)]
   tmp1 <- as.Date(names(data))
   tmp2 <- which(tmp1 >= as.Date(start) & tmp1 <= as.Date(end))
   tmp <- data[, tmp2]
   Daily_Death <- colSums(tmp)
   
   # Calcualtes Daily Counts
-  cdata <- count[, -c(1:5)]
+  tmp2 <- subset(count, Province_State == state)
+  ifelse(dim(tmp2)[1] == 0, tmp2 <- count, "error 2")
+  cdata <- tmp2[, -c(1:5)]
   ctmp1 <- as.Date(names(cdata))
   ctmp2 <- which(ctmp1 >= as.Date(start) & ctmp1 <= as.Date(end))
   ctmp <- cdata[, ctmp2]
@@ -144,28 +154,53 @@ animateTop <- function(start = Sys.Date() - 6, end = Sys.Date()){
 covidshp <- read.shp("../Shape_Files/cb_2018_us_county_500k.shp")
 coviddbf <- read.dbf("../Shape_Files/cb_2018_us_county_500k.dbf")            
 coviddbf$dbf <- data.frame(FIBS = with(coviddbf$dbf, paste0(STATEFP, COUNTYFP)), coviddbf$dbf)
-covidshpstate <- read.shp("../Shape_Files/cb_2018_us_state_500k.shp")
-coviddbfstate <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")   
+state_coviddbf <- read.dbf("../Shape_Files/cb_2018_us_state_500k.dbf")
+state_covidshp <- read.shp("../Shape_Files/cb_2018_us_state_500k.shp")
 
-## Default shape file
-## Confirmed cases given dates
+## Default shape file (County)
+## Confirmed cases given dates (County)
 covid.sp <- combine.data.shapefile(
   data = selectdates(start = Sys.Date() - 6, end = Sys.Date()),
   shp = covidshp, dbf = coviddbf)
 proj4string(covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 covid.sp <- spTransform(covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
-## Format popup data for leaflet map.
+## Format popup data for leaflet map.(County)
 pop_num <- prettyNum(covid.sp$Count_Sum, big.mark = ',', preserve.width = "none")
 popup_dat <- paste0("<strong>County: </strong>", 
                     covid.sp$Admin2, 
                     "<br><strong>Value: </strong>", 
                     pop_num)
+
 colours <- colorNumeric(palette = "YlOrRd", covid.sp@data$Count_Sum)
+
+## Aggregate data by state
+state_count <- selectdates(start = Sys.Date() - 6, end = Sys.Date())
+state_count <- data.frame(STATEFP = substr(state_count$FIPS, 0, 2), state_count[,c(3, 6, 8)])
+state_count <- aggregate(. ~ STATEFP + Province_State, state_count, FUN = sum)
+pop <- aggregate(Population ~ Province_State, death, FUN = sum)
+state_count$Perc_Sum <- state_count$Count_Sum[1:49]/pop$Population[1:49]
+row.names(state_count) <- state_count$STATEFP
+
+## Default shape file (State)
+state_coviddbf$dbf$STATEFP <- as.character(state_coviddbf$dbf$STATEFP)
+state_covid.sp <- combine.data.shapefile(data = state_count, shp = state_covidshp, dbf = state_coviddbf)
+proj4string(state_covid.sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+state_covid.sp <- spTransform(state_covid.sp, CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+## Format popup data for leaflet map. (State)
+pop_num2 <- prettyNum(state_covid.sp$Count_Sum, big.mark = ',', preserve.width = "none")
+popup_dat2 <- paste0("<strong>State: </strong>", 
+                    state_covid.sp$Province_State, 
+                    "<br><strong>Value: </strong>", 
+                    pop_num2)
+colours2 <- colorNumeric(palette = "YlOrRd", state_covid.sp@data$Count_Sum)
+
 
 ## Options for loader
 options(spinner.color = "#0275D8", spinner.color.background = "white", spinner.size = 2)
 
+## Creates Initial Plot (County)
 labels <- sprintf(
   "<strong>%s</strong><br/>%g Cases",
   covid.sp$Admin2, covid.sp$Count_Sum
@@ -198,7 +233,40 @@ map0 <-  leaflet(data = covid.sp) %>%
     title = "Count") %>%
   addScaleBar(position = "bottomleft")
 
-## Creates Initial Table
+## Creates Initial Plot (State)
+labels2 <- sprintf(
+  "<strong>%s</strong><br/>%g Cases",
+  state_covid.sp$Province_State, state_covid.sp$Count_Sum
+) %>% lapply(htmltools::HTML)
+
+map00 <-  leaflet(data = state_covid.sp) %>%
+  addTiles() %>% 
+  addPolygons(
+    layerId = ~ STATEFP,
+    fillColor = ~ colours2(Count_Sum),
+    weight = 1,
+    opacity = 0.7,
+    color = "white",
+    dashArray = '3',
+    fillOpacity = 0.7,
+    popup = popup_dat2,
+    highlight = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE), label = labels2, labelOptions = labelOptions(
+        style = list("font-weight" = "normal", padding = "3px 8px"),
+        textsize = "15px",
+        direction = "auto")) %>%
+  addLegend(
+    pal = colours2,
+    values = state_covid.sp@data$Count_Sum,
+    opacity = 1,
+    title = "Count") %>%
+  addScaleBar(position = "bottomleft")
+
+## Creates Initial Table (County)
 tbl_dta <- covid.sp@data
 colnames(tbl_dta) <- c("FIPS", "County", "State", "Latitude", "Longitude",
                        "Case Count", "Percent Sum", "Death Count")
@@ -206,6 +274,14 @@ tbl_dta <- tbl_dta[, -c(1, 4, 5)]
 tbl_dta$`Case Count` <- as.integer(tbl_dta$`Case Count`)
 tbl_dta$`Death Count` <- as.integer(tbl_dta$`Death Count`)
 table0 <- head(tbl_dta[order(tbl_dta$`Case Count`, decreasing = TRUE),], 10)
+
+## Creates Initial Table (State)
+tbl_dta2 <- state_covid.sp@data
+colnames(tbl_dta2) <- c("STATEFP", "State", "Case Count", "Death Count", "Percent Sum")
+tbl_dta2 <- tbl_dta2[, -1]
+tbl_dta2$`Case Count` <- as.integer(tbl_dta2$`Case Count`)
+tbl_dta2$`Death Count` <- as.integer(tbl_dta2$`Death Count`)
+table00 <- head(tbl_dta2[order(tbl_dta2$`Case Count`, decreasing = TRUE),], 10)
 
 ## Creates Initial Animation
 tempanimatedf <- animateDates(start = Sys.Date() - 6, end = Sys.Date()) 
@@ -280,11 +356,8 @@ anim <- staticplot + transition_states(YearMonth, transition_length = 4, state_l
 
 suppressWarnings(print(gganimate::anim_save("baranimation.gif", gganimate::animate(anim, fps = 5, nframes = 60))))
 
-remove <- c("Alaska", "Hawaii")
-state.names <- state.name[!state.name %in% remove]
-
 ## Initial Case Animation
-animdta <- animateCases(start = "2020-01-22", end = Sys.Date())
+animdta <- animateTop(start = "2020-01-22", end = Sys.Date())
 
 staticplot2 <- ggplot(animdta$cases, aes(x = Date, y = value, group = Admin2, colour = Admin2)) +
   geom_line(lwd = 1.05) +
@@ -312,7 +385,7 @@ staticplot3 <- ggplot(animdta$deaths, aes(x = Date, y = value, group = Admin2, c
 gganimate::anim_save("deathanimation.gif", gganimate::animate(staticplot3, fps = 5, nframes = 60))
 
 ## UI Function Begins
-ui <- fluidPage(
+ui <- fluidPage(theme = shinytheme("slate"), 
   tags$head(
     tags$style(HTML("
       .shiny-output-error-validation {
@@ -324,11 +397,12 @@ ui <- fluidPage(
   
   ## Application title
   titlePanel("United States COVID-19 Mapping - County Level"),
-  tags$em("By: Jose Alfaro"),
+  tags$em("By: "),
   tags$hr(),
   
   ## Map Panel
   tabsetPanel(
+    ## County Level Panel
     tabPanel("County Level", fluid = TRUE,
              sidebarLayout(
                sidebarPanel(
@@ -350,11 +424,33 @@ ui <- fluidPage(
                )
              )
     ),
-    ## Animation Pannel
+    ## State Level Pannel
+    tabPanel("State Level", fluid = TRUE,
+             sidebarLayout(
+               sidebarPanel(
+                 dateRangeInput("stateDateRange", "Date Range:",
+                                start = as.character(Sys.Date() - 6),
+                                end = as.character(Sys.Date()),
+                                min = "2020-01-22",
+                                max = Sys.Date()),
+                 checkboxInput("stateCheckBox", "Select all dates", FALSE),
+                 textOutput("stateDateCheck"),
+                 selectInput("stateTypeChoice", "Data Type:", choices = c("Raw", "Percentage")),
+                 actionButton("stateSubmitButton", "Submit", class = "btn btn-primary")
+               ),
+               mainPanel(
+                 withSpinner(leafletOutput("stateCaseMap"), type = 4),
+                 withSpinner(tableOutput('stateTable')),
+                 withSpinner(imageOutput("stateCaseAnimation")),
+                 withSpinner(imageOutput('stateDeathAnimation'))
+               )
+             )
+    ),
+    ## Animation Panel
     tabPanel("Animations", fluid = TRUE,
              sidebarLayout(fluid = TRUE,
                sidebarPanel(
-                 selectInput("stateChoiceAnimation", "Select State:", choices = state.names), 
+                 selectInput("stateChoiceAnimation", "Select State:", choices = c("US", state.names)), 
                  dateRangeInput("daterangeAnimation", "Date Range:",
                                 start = as.character(Sys.Date() - 6),
                                 end = as.character(Sys.Date()),
@@ -378,6 +474,7 @@ ui <- fluidPage(
 ## Server Function Begins
 server <- function(input, output, session) {
   DF1 <- reactiveValues(data = NULL)
+  DF2 <- reactiveValues(data = NULL)
   observe({
     DF1$data <- table0
     if (input$checkBox == TRUE){
@@ -396,6 +493,23 @@ server <- function(input, output, session) {
         value = FALSE
       )
     }
+    DF2$data <- table00
+    if (input$stateCheckBox == TRUE){
+      updateDateRangeInput(session,
+                           "stateDateRange",
+                           "Date Range:",
+                           start = "2020-01-22",
+                           end = Sys.Date(),
+                           min = "2020-01-22",
+                           max = Sys.Date())
+    }
+    if((input$stateCheckBox == T & input$stateDateRange[1] != "2020-01-22") | (input$stateCheckBox == T & input$stateDateRange[2] != Sys.Date())){
+      updateCheckboxInput(
+        session =  session,
+        inputId =  "stateCheckBox", 
+        value = FALSE
+      )
+    }
   })
   
   
@@ -408,7 +522,7 @@ server <- function(input, output, session) {
     )
   })
   
-  ## Displays Initial Map and Table
+  ## Displays Initial Map and Table (County)
   output$casemap <- renderLeaflet(map0)
   output$table <- renderTable(DF1$data)
   output$animation <- renderImage({
@@ -439,14 +553,17 @@ server <- function(input, output, session) {
     )
   }, deleteFile = TRUE)
   
+  ## Displays Initial Map and Table (State)
+  output$stateCaseMap <- renderLeaflet(map00)
+  output$stateTable <- renderTable(DF2$data)
+  
+  ## Observe event for County Level
   observeEvent(input$submitButton, {
     if (input$typeChoice == "Raw"){
       df <- selectdates(start = input$daterange[1], end = input$daterange[2])
-      animatedf <- animateDates(start = input$daterange[1], end = input$daterange[2])
       df$Total <- df$Count_Sum
     } else if (input$typeChoice == "Percentage"){
       df <- selectdates(start = input$daterange[1], end = input$daterange[2])
-      animatedf <- animateDates(start = input$daterange[1], end = input$daterange[2])
       df$Total <- df$Perc_Sum
     } else {return(NULL)}
     
@@ -479,14 +596,14 @@ server <- function(input, output, session) {
     df$`Death Count` <- as.integer(df$`Death Count`)
     
     DF1$data <- head(df[order(df$`Case Count`, decreasing = TRUE),], 10)
-    
+  })  
+  
+  ## Observe event for animation
+  observeEvent(input$submitButtonAnimation, {
     output$animation <- renderImage({
-      # A temp file to save the output.
-      # This file will be removed later by renderImage
-      outfile <- tempfile(fileext='.gif')
-      
-      # now make the animation
-      p <- ggplot(data = animatedf, aes(x = Date)) +
+      animdatedf <- animateDates(start = input$daterangeAnimation[1], end = input$daterangeAnimation[2], state = input$stateChoiceAnimation)
+
+      animPlot <- ggplot(data = animatedf, aes(x = Date)) +
         geom_line(aes(y = Daily_Count, color = "Count"), size = 1.25, show.legend = T) +
         geom_line(aes(y = Daily_Death, color = "Death"), size = 1.25) +
         ggtitle("COVID-19 Cases and Deaths in US") +
@@ -495,19 +612,16 @@ server <- function(input, output, session) {
         scale_color_manual(values = c('Count' = 'steelblue', 'Death' = 'darkred')) +
         labs(color = "") +
         theme_bw() +
-        theme(legend.position = "bottom") + 
+        theme(legend.position = "bottom")+ 
         transition_reveal(Date)
       
-      
-      gganimate::anim_save("outfile.gif", gganimate::animate(p, fps = 5, nframes = 60)) # New
-      
-      # Return a list containing the filename
+      gganimate::anim_save("outfile.gif", gganimate::animate(animPlot, fps = 5, nframes = 60))
+
       list(src = "outfile.gif",
-           contentType = 'image/gif'
-      )
-    }, deleteFile = TRUE)
+           contentType = 'image/gif')
+    }, deleteFile = T)
     
-  })  
+  })
 }
 
 ## Run the application 
